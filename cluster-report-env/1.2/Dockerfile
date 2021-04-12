@@ -4,7 +4,7 @@ FROM ubuntu:xenial
 # metadata
 LABEL base.image="ubuntu:xenial"
 LABEL description="An r environment and script for generating a genome cluster report"
-LABEL website="https://github.com/AbigailShockey/reports"
+LABEL website="https://github.com/kevinlibuit/reports"
 LABEL comments: "Include template rmd file; Dockerfile based on https://github.com/StaPH-B/docker-builds/blob/master/cluster-report-env/1.1/Dockerfile"
 LABEL maintainer="Kevin Libuit"
 LABEL maintainer.email="Kevin@libuitsci.com"
@@ -55,10 +55,11 @@ RUN R -e "install.packages(c('knitr',\
   R -e "tinytex::install_tinytex()"
 
 # install report repository & grab template file report
-RUN git clone -n https://github.com/AbigailShockey/reports.git && \
-  cd reports/
-COPY reports_template.Rmd /reports/report_template.Rmd
-  
+RUN wget https://github.com/theiagen/reports/archive/v1.2.1.tar.gz && \
+  tar -xvf v1.2.1.tar.gz && \
+  rm -rf v1.2.1.tar.gz && \
+  mkdir /reports && \
+  cp reports-1.2.1/*report_template.Rmd /reports
 
 WORKDIR /data
 ENV PATH "/reports:$PATH"
