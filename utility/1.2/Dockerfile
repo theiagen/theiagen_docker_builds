@@ -58,13 +58,13 @@ RUN pip3 install pdfkit pandas argparse
 # install Theiagen utilities
 RUN mkdir /theiagen_utilities && \
  wget https://github.com/theiagen/utilities/archive/refs/tags/v${THEIAGEN_UTILITIES_VER}.tar.gz -P /theiagen_utilities && \
- tar -xzf /theiagen_utilities/v${THEIAGEN_UTILITIES_VER}.tar.gz && \
+ tar -xzf /theiagen_utilities/v${THEIAGEN_UTILITIES_VER}.tar.gz -C /theiagen_utilities && \
  rm -v /theiagen_utilities/v${THEIAGEN_UTILITIES_VER}.tar.gz
 
 # set PATH
 ENV PATH="/google-cloud-sdk/bin:\
 /basespace/bin:\
-/theiagen_utilities/scripts:\
+/theiagen_utilities/utilities-${THEIAGEN_UTILITIES_VER}/scripts:\
 ${PATH}"
 
 # set working directory as /data
