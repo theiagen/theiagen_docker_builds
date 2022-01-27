@@ -53,7 +53,7 @@ RUN curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cl
 
 # install python dependencies
 # required, but part of core python: os, sys
-RUN pip3 install pdfkit pandas argparse 
+RUN pip3 install pdfkit pandas argparse openpyxl 
 
 # install Theiagen utilities
 RUN mkdir /theiagen_utilities && \
