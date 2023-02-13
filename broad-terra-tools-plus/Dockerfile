@@ -32,7 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # copying scripts dir to `/scripts` for consistency
 RUN git clone https://github.com/broadinstitute/terra-tools.git && \
  mkdir /scripts && \
- cp -vr /terra-tools/scripts /scripts
+ cp -vr /terra-tools/scripts/* /scripts
 
 # original requirements.txt:
 # firecloud==0.16.26
