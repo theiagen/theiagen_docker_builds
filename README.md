@@ -2,6 +2,10 @@
 
 To build the docker image locally and push to dockerhub and quay, do the following. This will require write access to Theiagen's dockerhub and quay organizations.
 
+Theiagen Quay repos: https://quay.io/organization/theiagen
+
+Theiagen Dockerhub repos: https://hub.docker.com/u/theiagen
+
 ```bash
 # download code
 git clone https://github.com/theiagen/theiagen_docker_builds.git
