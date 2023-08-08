@@ -36,7 +36,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # grab theiagen/utilities code
 # copy over scripts into /scripts within the container filesystem
 RUN git clone https://github.com/theiagen/utilities && \
- cd utilities && \
+ mv -v /utilities/ /utilities-0.2/ && \
+ cd utilities-0.2/ && \
  git checkout ${THEIAGEN_UTILITIES_COMMIT} && \
  mkdir /scripts && \
  cp -v scripts/* /scripts
