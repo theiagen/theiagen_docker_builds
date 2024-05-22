@@ -19,7 +19,6 @@ LABEL maintainer.email="kapsakcj@gmail.com"
 # see here for reason why I'm manualy installing 2.14.0 instead of using apt-get: https://github.com/ncbi/amr/releases/tag/amrfinder_v3.11.8
 
 # hmmer installed via apt is v3.3.2
-# removed because likely unnecessary since we are not compiling from source: make g++
 # libgomp1 required for makeblastdb
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates \
@@ -58,8 +57,7 @@ ENV PATH="/amrfinder/amr:/ncbi-blast-${BLAST_VER}+/bin:$PATH" \
 
 # blast has to be installed first so that 'makeblastdb' is available for amrfinder during database update
 # download and install amrfinderplus from source; make /data
-# TODO - pin to specific commit?
-# softlink required so that `amrfinder -l` works properly
+# TODO - pin to specific commit of ncbi/amr repo?
 RUN mkdir amrfinder && cd /amrfinder && \
   git clone https://github.com/ncbi/amr.git && \
   cd amr && \
