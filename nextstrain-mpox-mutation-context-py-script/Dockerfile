@@ -4,8 +4,8 @@ FROM ubuntu:jammy
 # metadata
 LABEL base.image="ubuntu:jammy"
 LABEL dockerfile.version="1"
-LABEL software="centroid"
-LABEL software.version="v0.1.0"
+LABEL software="mutation_context.py from Nextstrain"
+LABEL software.version="none"
 LABEL description="a docker image for running mutation_context.py from Augur Mpox public build"
 LABEL website="https://github.com/nextstrain/mpox/blob/master/nextclade/scripts/mutation_context.py"
 LABEL license="https://github.com/nextstrain/mpox/blob/master/LICENSE"
@@ -24,7 +24,7 @@ RUN mkdir /scripts && cd /scripts && \
   wget https://raw.githubusercontent.com/nextstrain/mpox/master/nextclade/scripts/mutation_context.py && \
   chmod +x /scripts/mutation_context.py
 
-#set paths
+# set paths & locale for singularity compatibilty
 ENV PATH="/scripts:\
 ${PATH}" \
 LC_ALL=C
