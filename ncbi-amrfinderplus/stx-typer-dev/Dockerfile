@@ -1,4 +1,4 @@
-FROM ubuntu:jammy as app
+FROM ubuntu:jammy AS app
 
 ARG AMRFINDER_VER="3.12.8"
 ARG AMRFINDER_DB_VER="2024-05-02.2"
@@ -83,7 +83,7 @@ WORKDIR /data
 CMD [ "amrfinder", "--help" ]
 
 ## Test stage
-FROM app as test
+FROM app AS test
 
 # list database version and available --organism options
 RUN amrfinder -l
