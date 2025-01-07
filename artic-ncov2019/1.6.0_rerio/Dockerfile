@@ -14,7 +14,9 @@ RUN micromamba install -y -c bioconda -c conda-forge \
 ENV PATH="/opt/conda/bin:$PATH" \
     CONDA_PREFIX="/opt/conda"
 
+# Get models for newer flowcell chemistries
+RUN artic_get_models
+
 WORKDIR /data
 
 RUN git clone --recursive https://github.com/artic-network/primer-schemes
-
