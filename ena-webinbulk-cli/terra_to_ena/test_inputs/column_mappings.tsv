@@ -1,0 +1,14 @@
+terra_column	ena_column
+ena_test_id	sample_id
+sample_accession	sample_accession
+experiment_name	experiment_name
+library_name	library_name
+library_source	library_source
+library_selection	library_selection
+library_strategy	library_strategy
+insert_size	insert_size
+sequencing_platform	sequencing_platform
+sequencing_instrument	sequencing_instrument
+description	library_description
+read1	uploaded file 1
+read2	uploaded file 2
