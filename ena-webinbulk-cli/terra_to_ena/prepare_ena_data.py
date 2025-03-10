@@ -6,6 +6,14 @@ import numpy as np
 import os
 import sys
 import json
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(filename)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Prepare ENA reads metadata spreadsheet from Terra table')
@@ -81,9 +89,9 @@ def main():
     # Load the input table
     try:
         table = pd.read_csv(args.input, sep='\t', header=0, dtype=str)
-        print(f"Loaded table with {len(table)} rows and {len(table.columns)} columns")
+        logger.info(f"Loaded table with {len(table)} rows and {len(table.columns)} columns")
     except Exception as e:
-        print(f"Error loading input table: {e}")
+        logger.info(f"Error loading input table: {e}")
         sys.exit(1)
     
     # Load column mappings if provided
@@ -95,11 +103,11 @@ def main():
                 for _, row in mappings_df.iterrows():
                     if pd.notna(row['terra_column']) and pd.notna(row['ena_column']):
                         column_mappings[row['terra_column']] = row['ena_column']
-                print(f"Loaded {len(column_mappings)} column mappings")
+                logger.info(f"Loaded {len(column_mappings)} column mappings")
             else:
-                print("Warning: Column mappings file must have 'terra_column' and 'ena_column' columns")
+                logger.info("Warning: Column mappings file must have 'terra_column' and 'ena_column' columns")
         except Exception as e:
-            print(f"Error loading column mappings: {e}")
+            logger.info(f"Error loading column mappings: {e}")
     
     # Set up the file column mappings based on input args or column mappings file
     read1_column = args.read1_column
@@ -124,18 +132,18 @@ def main():
     if args.samples:
         sample_list = args.samples.split(',')
         table = table[table[args.sample_id_column].isin(sample_list)]
-        print(f"Filtered to {len(table)} samples")
+        logger.info(f"Filtered to {len(table)} samples")
     
     # Required metadata fields for ENA submission - raw reads
     #https://ena-docs.readthedocs.io/en/latest/submit/reads/webin-cli.html
     required_metadata = [
-        "sample_accession",  # Required: Sample accession
-        "experiment_name",    # Required: Experiment name
-        "sequencing_platform", # Required: Sequencing platform
-        "sequencing_instrument", # Required: Sequencing instrument
-        "library_source",     # Required: Library source
-        "library_selection",  # Required: Library selection
-        "library_strategy"  # Required: Library strategy
+        "sample_accession",
+        "experiment_name",
+        "sequencing_platform",
+        "sequencing_instrument",
+        "library_source",
+        "library_selection",
+        "library_strategy"
     ]
     
     # Need at least one read file
@@ -151,10 +159,10 @@ def main():
         read_file_column = cram_column
     
     if not read_file_column:
-        print(f"Error: No read file columns found in the table. At least one of {read1_column}, {bam_column}, or {cram_column} must be present.")
+        logger.error(f"Error: No read file columns found in the table. At least one of {read1_column}, {bam_column}, or {cram_column} must be present.")
         sys.exit(1)
     else:
-        print(f"Using {read_file_column} as the primary read file column")
+        logger.info(f"Using {read_file_column} as the primary read file column")
     
     # Check for missing required metadata and fail if any is found (unless --allow-missing is set)
     missing_data, excluded_samples = check_required_metadata(table, required_metadata, args.sample_id_column)
@@ -165,24 +173,24 @@ def main():
             exclusions.write(f"Samples excluded for missing required metadata for reads submission (will have empty values in indicated columns):\n")
         
         excluded_samples.to_csv(args.excluded, mode='a', sep='\t')
-        print(f"ERROR: {len(excluded_samples)} samples are missing required metadata:")
-        print(excluded_samples)
+        logger.error(f"{len(excluded_samples)} samples are missing required metadata:")
+        logger.error(excluded_samples)
         
         if not args.allow_missing:
-            print("\nSubmission aborted. All samples must have required metadata.")
-            print("Required metadata fields are: " + ", ".join(required_metadata))
-            print("\nYou can override this check with --allow-missing but only samples with complete metadata will be submitted.")
+            logger.error("\nSubmission aborted. All samples must have required metadata.")
+            logger.error("Required metadata fields are: " + ", ".join(required_metadata))
+            logger.error("\nYou can override this check with --allow-missing but only samples with complete metadata will be submitted.")
             sys.exit(1)
         else:
-            print("\nContinuing with remaining samples as --allow-missing was specified.")
+            logger.info("\nContinuing with remaining samples as --allow-missing was specified.")
             # Remove rows with missing metadata
             table = table.dropna(subset=required_metadata, axis=0, how='any')
-            print(f"{len(table)} samples remain after removing those with missing required metadata")
+            logger.info(f"{len(table)} samples remain after removing those with missing required metadata")
     else:
         # If no missing data, write an empty excluded samples report
         with open(args.excluded, "w") as exclusions:
             exclusions.write("No samples were excluded for missing required metadata\n")
-        print("All samples have the required metadata")
+        logger.info("All samples have the required metadata")
     
     # Track file paths and their locations
     file_paths = {}
@@ -347,17 +355,17 @@ def main():
     
     # Check if we have any samples left to submit
     if len(ena_spreadsheet) == 0:
-        print("ERROR: No samples remain after filtering out those with missing metadata")
+        logger.info("No samples remain after filtering out those with missing metadata")
         sys.exit(1)
     
     # Write the ENA spreadsheet
     ena_spreadsheet.to_csv(args.output, sep="\t", index=False)
-    print(f"Created ENA reads spreadsheet with {len(ena_spreadsheet)} samples")
+    logger.info(f"Created ENA reads spreadsheet with {len(ena_spreadsheet)} samples")
     
     # Write file paths mapping as JSON
     with open(args.file_paths, "w") as f:
         json.dump(file_paths, f, indent=2)
-    print(f"Listed {len(file_paths)} data files that need to be localized")
+    logger.info(f"Listed {len(file_paths)} data files that need to be localized")
 
 if __name__ == "__main__":
     main()
