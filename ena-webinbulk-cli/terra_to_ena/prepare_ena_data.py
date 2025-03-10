@@ -68,7 +68,7 @@ def check_required_metadata(table, required_metadata, sample_id_column):
     Returns:
         tuple: (missing_data_exists, excluded_samples_df)
     """
-    # Replace blank cells with NaNs
+    # Replace blank cells with na's
     table.replace(r'^\s+$', np.nan, regex=True)
     
     # Find rows with missing required data
