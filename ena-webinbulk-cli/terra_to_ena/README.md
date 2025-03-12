@@ -16,12 +16,15 @@ python3 register_samples_ena.py \
 Then to prepare metadat for bulk webin cli:
 
 ```
-python prepare_ena_data.py \
-  --input test_results/metadata_with_accessions.tsv \
-  --output ena_prepped_metadata.tsv \ 
-  --file-paths file_paths.json \
+python3 register_samples_ena.py \
+  --metadata test_inputs/bacterial_pathogen_example.tsv \
+  --output test_results \
+  --username Webin-xxxx \
+  --password TestPassword \
+  --study PRJEB12345 \
   --sample-id-column sample_id \
-  --study-accession PRJEB12345
+  --sample-type prokaryotic_pathogen \
+  --test
 ```
 
 Then we need to localize the files
