@@ -108,9 +108,6 @@ def parse_args():
                        help='ENA sample type')
     
     # Optional arguments
-    # We will want to clip off the read1 and read2 columns from the metadata file
-    parser.add_argument('--read1-column', default='read1', help='Column name for read1/first fastq files (default: read1)')
-    parser.add_argument('--read2-column', default='read2', help='Column name for read2/second fastq files (default: read2)')
     parser.add_argument('--center', help='Center name for submission')
     parser.add_argument('--test', action='store_true', help='Use test ENA server')
     parser.add_argument('--allow-missing', action='store_true', help='Allow missing metadata fields')
@@ -328,7 +325,16 @@ def add_sample_attribute(sample_attributes, tag, value, units=None):
 
 def generate_sample_xml(metadata_df, checklist_id, sample_id_column, center_name=None, column_mappings=None):
     """Generate sample XML for ENA submission"""
+    
     sample_set = ET.Element("SAMPLE_SET")
+    
+    # I think for the metadata submission we need to add only the necessary metadata fields, 
+    # Otherwise downstream when reads are submitted I've seen it run into problems where it 
+    # Complains about metadata objects already existing
+    required_ena_fields = set()
+    if checklist_id in CHECKLIST_REQUIREMENTS:
+        required_ena_fields.update(CHECKLIST_REQUIREMENTS[checklist_id].get("mandatory", []))
+        required_ena_fields.update(CHECKLIST_REQUIREMENTS[checklist_id].get("recommended", []))
     
     # Field units for specific attributes
     field_units = {
@@ -342,7 +348,7 @@ def generate_sample_xml(metadata_df, checklist_id, sample_id_column, center_name
         'host age': 'years'
     }
     
-    # Default field mapping for common columns
+    # Default field mapping for common columns, used in local scope
     default_field_mapping = {
         'collection_date': 'collection date',
         'geo_loc_name': 'geographic location (country and/or sea)',
@@ -457,17 +463,11 @@ def generate_sample_xml(metadata_df, checklist_id, sample_id_column, center_name
         if study_accession:
             add_sample_attribute(sample_attributes, "ENA-STUDY", study_accession)
         
-        # Once we get here we know all pontential fields are in the row and have been checked
-        # so we can just loop through all the columns and add them to the sample attributes
-        handled_fields = {'sample_accession', 'name', 'submission_id', 'title', 
-                          'library_name', 'sample_title', 'organism', 'taxon_id',
-                          'sample_type', 'attribute_package', 'study_accession', 
-                          'description', 'library_description', 'sample_id'}
+        processed_fields = {'title', 'organism', 'taxon_id', 'taxa_id', 'taxonomy_id', 
+                           'description', 'library_description', 'study_accession'}
+        processed_fields.add(sample_id_column)
         
-        # Add the dynamic sample_id_column to handled fields
-        handled_fields.add(sample_id_column)
-                          
-        # Special handling for lat_lon
+        # Special handling for lat_lon which can map to two separate ENA fields
         lat_lon = row.get('lat_lon')
         if lat_lon and str(lat_lon).strip() not in ('', 'NA', 'nan', 'None', 'NaN'):
             try:
@@ -488,23 +488,39 @@ def generate_sample_xml(metadata_df, checklist_id, sample_id_column, center_name
             except:
                 # If parsing fails, just add as a single attribute
                 add_sample_attribute(sample_attributes, "geographic coordinates", str(lat_lon))
-            handled_fields.add('lat_lon')
+            processed_fields.add('lat_lon')
         
-        # Handle all mapped fields
+        # Process all columns from the input data that are mapped to required ENA fields
         for col in row.index:
-            # Skip already handled fields
-            if col in handled_fields:
+            # Skip already processed fields
+            if col in processed_fields:
                 continue
                 
             value = row[col]
             if pd.isna(value) or str(value).strip() in ('', 'NA', 'nan', 'None', 'NaN'):
                 continue
             
-            # Use the mapped field name if available
-            field_name = field_mapping.get(col, col)
-            unit = field_units.get(field_name)
+            # Get the mapped ENA field name (or use the column name if no mapping exists)
+            ena_field = field_mapping.get(col, col)
             
-            add_sample_attribute(sample_attributes, field_name, value, unit)
+            # Only include the field if it's in the required/recommended list
+            if ena_field in required_ena_fields:
+                unit = field_units.get(ena_field)
+                add_sample_attribute(sample_attributes, ena_field, value, unit)
+                
+        # Double-check for required ENA fields that might have direct column matches
+        # This ensures we catch fields that might be named exactly as ENA expects
+        for ena_field in required_ena_fields:
+            # Skip fields that might have been handled by lat_lon processing
+            if ena_field in ["geographic location (latitude)", "geographic location (longitude)"]:
+                continue
+                
+            # If the field exists directly in the data with the ENA name
+            if ena_field in row and ena_field not in processed_fields:
+                value = row[ena_field]
+                if pd.notna(value) and str(value).strip() not in ('', 'NA', 'nan', 'None', 'NaN'):
+                    unit = field_units.get(ena_field)
+                    add_sample_attribute(sample_attributes, ena_field, value, unit)
     
     return sample_set
 
@@ -638,20 +654,19 @@ def main():
     
     # Load metadata spreadsheet
     try:
-        metadata_df = pd.read_csv(args.metadata, sep='\t', dtype=str)
-        metadata_df = metadata_df.replace(['NA', 'na', ''], pd.NA).fillna('')
-        logger.info(f"Loaded metadata for {len(metadata_df)} samples")
-        if args.sample_id_column not in metadata_df.columns:
+        metadata_for_ena_df = pd.read_csv(args.metadata, sep='\t', dtype=str)
+        metadata_for_ena_df = metadata_for_ena_df.replace(['NA', 'na', ''], pd.NA).fillna('')
+        logger.info(f"Loaded metadata for {len(metadata_for_ena_df)} samples")
+        if args.sample_id_column not in metadata_for_ena_df.columns:
             logger.error(f"Sample ID column '{args.sample_id_column}' not found in metadata file")
-            logger.error(f"Available columns: {', '.join(metadata_df.columns)}")
+            logger.error(f"Available columns: {', '.join(metadata_for_ena_df.columns)}")
             sys.exit(1)
     except Exception as e:
         logger.error(f"Error loading metadata file: {e}")
         sys.exit(1)
     
-    # Clip off readq1 and read2 columns, don't want to include in xml
-    original_metadata_df = metadata_df.copy()
-    metadata_drop_reads_df = original_metadata_df.drop(columns=[args.read1_column, args.read2_column])
+    # Make a copy of original for later
+    original_metadata_df = metadata_for_ena_df.copy()
     
     # Load column mappings if provided
     column_mappings = None
@@ -660,8 +675,8 @@ def main():
     
     # Add study accession to metadata if not already there, just so we 
     # Grab everything we need from one place -- either way will be user provided on way or the other
-    if 'study_accession' not in metadata_drop_reads_df.columns:
-        metadata_df['study_accession'] = args.study
+    if 'study_accession' not in metadata_for_ena_df.columns:
+        metadata_for_ena_df['study_accession'] = args.study
     
     # Get checklist ID for sample type
     checklist_id = CHECKLIST_MAPPING.get(args.sample_type)
@@ -671,7 +686,7 @@ def main():
     
     # Validate metadata against checklist
     validation_result = validate_metadata(
-        metadata_drop_reads_df, 
+        metadata_for_ena_df, 
         checklist_id,
         args.sample_id_column,
         column_mappings, 
@@ -699,7 +714,7 @@ def main():
     all_results = []
     all_errors = []
     
-    for batch_idx, batch_df in enumerate(batch_samples(metadata_drop_reads_df, args.batch_size)):
+    for batch_idx, batch_df in enumerate(batch_samples(metadata_for_ena_df, args.batch_size)):
         logger.info(f"Processing batch {batch_idx+1}, samples {len(batch_df)}")
         
         # Generate sample XML
@@ -754,7 +769,7 @@ def main():
             logger.error(f"Errors in batch {batch_idx+1}: {', '.join(receipt_result['errors'])}")
         
         # Pause briefly between batches to avoid rate limiting just in case
-        if batch_idx < len(list(batch_samples(metadata_df, args.batch_size))) - 1:
+        if batch_idx < len(list(batch_samples(metadata_for_ena_df, args.batch_size))) - 1:
             time.sleep(2)
     
     # Write final results
@@ -810,7 +825,7 @@ def main():
         if args.column_mappings and column_mappings:
             f.write(f"Column mappings: Used {len(column_mappings)} mappings from {args.column_mappings}\n\n")
         
-        f.write(f"Total samples processed: {len(metadata_df)}\n")
+        f.write(f"Total samples processed: {len(metadata_for_ena_df)}\n")
         f.write(f"Successfully submitted: {len(all_results)}\n")
         
         if all_results:

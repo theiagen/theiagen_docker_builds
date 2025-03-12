@@ -1,0 +1,5 @@
+study_accession	sample_accession	experiment_name	sequencing_platform	sequencing_instrument	library_name	library_source	library_selection	library_strategy	library_description	insert_size	uploaded file 1	uploaded file 2
+PRJEB12345	SAMEA131558719	Test experiment1	ILLUMINA	Illumina HiSeq 1000	Test_Library	GENOMIC	PCR	WGS	Test1	20	data/NTC23A_R1.fastq.gz	data/NTC23A_R2.fastq.gz
+PRJEB12345	SAMEA131558720	Test experiment2	ILLUMINA	Illumina HiSeq 1000	Test_Library	GENOMIC	PCR	WGS	Test2	20	data/NTC23B_R1.fastq.gz	data/NTC23B_R2.fastq.gz
+PRJEB12345	SAMEA131558721	Test experiment3	ILLUMINA	Illumina HiSeq 1000	Test_Library	GENOMIC	PCR	WGS	Test3	20	data/NTC25A_R1.fastq.gz	data/NTC25A_R2.fastq.gz
+PRJEB12345	SAMEA131558722	Test experiment4	ILLUMINA	Illumina HiSeq 1000	Test_Library	GENOMIC	PCR	WGS	Test4	20	data/NTC25B_R1.fastq.gz	data/NTC25B_R2.fastq.gz

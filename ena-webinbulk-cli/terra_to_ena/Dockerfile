@@ -38,7 +38,9 @@ RUN git clone https://github.com/enasequence/ena-bulk-webincli.git && \
 
 COPY prepare_ena_data.py /usr/local/bin/
 COPY localize_files.py /usr/local/bin/
+COPY register_samples_ena.py /usr/local/bin/
 
+RUN chmod +x /usr/local/bin/register_samples_ena.py
 RUN chmod +x /usr/local/bin/prepare_ena_data.py
 RUN chmod +x /usr/local/bin/localize_files.py
 
