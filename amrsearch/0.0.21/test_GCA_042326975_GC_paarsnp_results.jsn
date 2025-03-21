@@ -1,0 +1,438 @@
+{
+  "assemblyId" : "GCA_042326975.1_GC",
+  "library" : {
+    "source" : "PUBLIC",
+    "version" : "0.0.20",
+    "label" : "485"
+  },
+  "acquired" : [ ],
+  "variants" : [ "folP_R228S", "penA_ins346D", "rpsJ_V57M", "porB1b_A121N", "mtrR_G45D" ],
+  "matches" : [ {
+    "refId" : "16S_rDNA",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000049.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.49, whole genome shotgun sequence",
+    "queryStart" : 247,
+    "pid" : 100.0,
+    "evalue" : 0.0,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 1529,
+    "queryStop" : 1775,
+    "refLength" : 1529,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "gyrA",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000006.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.06, whole genome shotgun sequence",
+    "queryStart" : 40759,
+    "pid" : 100.0,
+    "evalue" : 0.0,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 2751,
+    "queryStop" : 43509,
+    "refLength" : 2751,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "macAB_promoter",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000012.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.12, whole genome shotgun sequence",
+    "queryStart" : 10838,
+    "pid" : 100.0,
+    "evalue" : 2.8885E-113,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 224,
+    "queryStop" : 11061,
+    "refLength" : 224,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "mtrC",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000010.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.10, whole genome shotgun sequence",
+    "queryStart" : 40621,
+    "pid" : 100.0,
+    "evalue" : 0.0,
+    "strand" : "REVERSE",
+    "reversed" : true,
+    "refStop" : 1239,
+    "queryStop" : 41859,
+    "refLength" : 1239,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "mtrR_promoter",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000010.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.10, whole genome shotgun sequence",
+    "queryStart" : 41860,
+    "pid" : 100.0,
+    "evalue" : 1.70789E-154,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 300,
+    "queryStop" : 42159,
+    "refLength" : 300,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "parE",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000010.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.10, whole genome shotgun sequence",
+    "queryStart" : 5722,
+    "pid" : 100.0,
+    "evalue" : 0.0,
+    "strand" : "REVERSE",
+    "reversed" : true,
+    "refStop" : 1986,
+    "queryStop" : 7707,
+    "refLength" : 1986,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "rplV",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000037.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.37, whole genome shotgun sequence",
+    "queryStart" : 3821,
+    "pid" : 100.0,
+    "evalue" : 2.46161E-171,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 330,
+    "queryStop" : 4150,
+    "refLength" : 330,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "rpoB",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000036.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.36, whole genome shotgun sequence",
+    "queryStart" : 3590,
+    "pid" : 100.0,
+    "evalue" : 0.0,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 4179,
+    "queryStop" : 7768,
+    "refLength" : 4179,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "rpoD",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000003.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.03, whole genome shotgun sequence",
+    "queryStart" : 5783,
+    "pid" : 100.0,
+    "evalue" : 0.0,
+    "strand" : "REVERSE",
+    "reversed" : true,
+    "refStop" : 1929,
+    "queryStop" : 7711,
+    "refLength" : 1929,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "rpsE",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000037.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.37, whole genome shotgun sequence",
+    "queryStart" : 8829,
+    "pid" : 100.0,
+    "evalue" : 0.0,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 519,
+    "queryStop" : 9347,
+    "refLength" : 519,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "ponA1",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000007.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.07, whole genome shotgun sequence",
+    "queryStart" : 44876,
+    "pid" : 99.96,
+    "evalue" : 0.0,
+    "strand" : "REVERSE",
+    "reversed" : true,
+    "refStop" : 2397,
+    "queryStop" : 47272,
+    "refLength" : 2397,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "23S_rDNA",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000049.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.49, whole genome shotgun sequence",
+    "queryStart" : 2387,
+    "pid" : 99.9,
+    "evalue" : 0.0,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 2890,
+    "queryStop" : 5276,
+    "refLength" : 2890,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "rpsJ",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000037.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.37, whole genome shotgun sequence",
+    "queryStart" : 17,
+    "pid" : 99.68,
+    "evalue" : 6.18656E-160,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 312,
+    "queryStop" : 328,
+    "refLength" : 312,
+    "resistanceVariants" : [ {
+      "name" : "V57M",
+      "refStart" : 169,
+      "refStop" : 169,
+      "queryStart" : 186,
+      "queryStop" : 186
+    } ]
+  }, {
+    "refId" : "parC",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000048.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.48, whole genome shotgun sequence",
+    "queryStart" : 1786,
+    "pid" : 99.52,
+    "evalue" : 0.0,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 2304,
+    "queryStop" : 4089,
+    "refLength" : 2304,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "norM_promoter",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000001.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.01, whole genome shotgun sequence",
+    "queryStart" : 138149,
+    "pid" : 99.4,
+    "evalue" : 1.21953E-168,
+    "strand" : "REVERSE",
+    "reversed" : true,
+    "refStop" : 334,
+    "queryStop" : 138484,
+    "refLength" : 334,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "mtrR",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000010.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.10, whole genome shotgun sequence",
+    "queryStart" : 42110,
+    "pid" : 98.42,
+    "evalue" : 0.0,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 633,
+    "queryStop" : 42742,
+    "refLength" : 633,
+    "resistanceVariants" : [ {
+      "name" : "G45D",
+      "refStart" : 133,
+      "refStop" : 133,
+      "queryStart" : 42243,
+      "queryStop" : 42243
+    } ]
+  }, {
+    "refId" : "penA",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000016.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.16, whole genome shotgun sequence",
+    "queryStart" : 33018,
+    "pid" : 98.0,
+    "evalue" : 0.0,
+    "strand" : "REVERSE",
+    "reversed" : true,
+    "refStop" : 1746,
+    "queryStop" : 34766,
+    "refLength" : 1746,
+    "resistanceVariants" : [ {
+      "name" : "ins346D",
+      "refStart" : 1038,
+      "refStop" : 1038,
+      "queryStart" : 34054,
+      "queryStop" : 34054
+    } ]
+  }, {
+    "refId" : "rplD",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000037.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.37, whole genome shotgun sequence",
+    "queryStart" : 1758,
+    "pid" : 95.65,
+    "evalue" : 0.0,
+    "strand" : "FORWARD",
+    "reversed" : false,
+    "refStop" : 621,
+    "queryStop" : 2378,
+    "refLength" : 621,
+    "resistanceVariants" : [ ]
+  }, {
+    "refId" : "porB1b",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000008.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.08, whole genome shotgun sequence",
+    "queryStart" : 46,
+    "pid" : 93.89,
+    "evalue" : 0.0,
+    "strand" : "REVERSE",
+    "reversed" : true,
+    "refStop" : 1035,
+    "queryStop" : 1092,
+    "refLength" : 1035,
+    "resistanceVariants" : [ {
+      "name" : "A121N",
+      "refStart" : 361,
+      "refStop" : 361,
+      "queryStart" : 407,
+      "queryStop" : 407
+    } ]
+  }, {
+    "refId" : "folP",
+    "refStart" : 1,
+    "queryId" : "ABVDXF010000010.1 Neisseria gonorrhoeae strain GCWGS-17326 SAMN24041470-rid13714813.denovo.10, whole genome shotgun sequence",
+    "queryStart" : 16288,
+    "pid" : 93.12,
+    "evalue" : 0.0,
+    "strand" : "REVERSE",
+    "reversed" : true,
+    "refStop" : 852,
+    "queryStop" : 17145,
+    "refLength" : 852,
+    "resistanceVariants" : [ {
+      "name" : "R228S",
+      "refStart" : 682,
+      "refStop" : 682,
+      "queryStart" : 16976,
+      "queryStop" : 16976
+    } ]
+  } ],
+  "resistanceProfile" : [ {
+    "agent" : {
+      "key" : "AZM",
+      "type" : "Macrolides",
+      "name" : "Azithromycin"
+    },
+    "state" : "NOT_FOUND",
+    "determinants" : {
+      "acquired" : [ ],
+      "variants" : [ {
+        "gene" : "mtrR",
+        "variant" : "G45D",
+        "resistanceEffect" : "CONTRIBUTES"
+      } ]
+    },
+    "determinantRules" : { }
+  }, {
+    "agent" : {
+      "key" : "CRO",
+      "type" : "Extended-Spectrum Beta-Lactams",
+      "name" : "Ceftriaxone"
+    },
+    "state" : "NOT_FOUND",
+    "determinants" : {
+      "acquired" : [ ],
+      "variants" : [ ]
+    },
+    "determinantRules" : { }
+  }, {
+    "agent" : {
+      "key" : "CFM",
+      "type" : "Broad-spectrum Cephalosporins",
+      "name" : "Cefixime"
+    },
+    "state" : "NOT_FOUND",
+    "determinants" : {
+      "acquired" : [ ],
+      "variants" : [ {
+        "gene" : "mtrR",
+        "variant" : "G45D",
+        "resistanceEffect" : "CONTRIBUTES"
+      } ]
+    },
+    "determinantRules" : { }
+  }, {
+    "agent" : {
+      "key" : "CIP",
+      "type" : "Fluoroquinolones",
+      "name" : "Ciprofloxacin"
+    },
+    "state" : "NOT_FOUND",
+    "determinants" : {
+      "acquired" : [ ],
+      "variants" : [ ]
+    },
+    "determinantRules" : { }
+  }, {
+    "agent" : {
+      "key" : "PEN",
+      "type" : "Beta-Lactams",
+      "name" : "Penicillin"
+    },
+    "state" : "INTERMEDIATE",
+    "determinants" : {
+      "acquired" : [ ],
+      "variants" : [ {
+        "gene" : "mtrR",
+        "variant" : "G45D",
+        "resistanceEffect" : "CONTRIBUTES"
+      }, {
+        "gene" : "porB1b",
+        "variant" : "A121N",
+        "resistanceEffect" : "CONTRIBUTES"
+      }, {
+        "gene" : "penA",
+        "variant" : "ins346D",
+        "resistanceEffect" : "CONTRIBUTES"
+      } ]
+    },
+    "determinantRules" : {
+      "penA_ins346D" : "INTERMEDIATE",
+      "porB1b_A121N" : "INTERMEDIATE",
+      "mtrR_G45D" : "INTERMEDIATE"
+    }
+  }, {
+    "agent" : {
+      "key" : "SMX",
+      "type" : "Sulfonamides",
+      "name" : "Sulfonamides"
+    },
+    "state" : "RESISTANT",
+    "determinants" : {
+      "acquired" : [ ],
+      "variants" : [ {
+        "gene" : "folP",
+        "variant" : "R228S",
+        "resistanceEffect" : "RESISTANCE"
+      } ]
+    },
+    "determinantRules" : {
+      "folP_R228S" : "RESISTANT"
+    }
+  }, {
+    "agent" : {
+      "key" : "SPT",
+      "type" : "Aminoglycosides",
+      "name" : "Spectinomycin"
+    },
+    "state" : "NOT_FOUND",
+    "determinants" : {
+      "acquired" : [ ],
+      "variants" : [ ]
+    },
+    "determinantRules" : { }
+  }, {
+    "agent" : {
+      "key" : "TCY",
+      "type" : "Tetracyclines",
+      "name" : "Tetracycline"
+    },
+    "state" : "INTERMEDIATE",
+    "determinants" : {
+      "acquired" : [ ],
+      "variants" : [ {
+        "gene" : "mtrR",
+        "variant" : "G45D",
+        "resistanceEffect" : "CONTRIBUTES"
+      }, {
+        "gene" : "rpsJ",
+        "variant" : "V57M",
+        "resistanceEffect" : "CONTRIBUTES"
+      } ]
+    },
+    "determinantRules" : {
+      "rpsJ_V57M" : "INTERMEDIATE"
+    }
+  } ]
+}
