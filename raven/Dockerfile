@@ -1,49 +1,38 @@
-FROM ubuntu:jammy as app
+FROM mambaorg/micromamba:2.0.3-ubuntu22.04 AS app
+
+# build and run as root users since micromamba image has 'mambauser' set as the $USER
+USER root
+# set workdir to default for building; set to /data at the end
+WORKDIR /
 
 ARG RAVEN_VER="1.8.3"
 
 # Label the image with metadata that might be important to the user
-LABEL base.image="ubuntu:jammy"
+LABEL base.image="mambaorg/micromamba:2.0.3-ubuntu22.04"
 LABEL dockerfile.version="1"
-LABEL software="SoftwareName"
-LABEL software.version="${SOFTWARENAME_VER}"
+LABEL software="raven"
+LABEL software.version="${RAVEN_VER}"
 LABEL description="This software runs Raven long read assembler."
 LABEL website="https://github.com/theiagen/theiagen_docker_builds/"
 LABEL license="https://github.com/theiagen/theiagen_docker_builds/blob/master/LICENSE"
-LABEL maintainer="Zachary Konkel"
-LABEL maintainer.email="zachary.konkel@theiagen.com"
+LABEL maintainer="Theron James"
+LABEL maintainer.email="theron.james@theiagen.com"
 
-# Install dependencies for building Raven
-RUN apt-get update && apt-get install -y --no-install-recommends \
-   wget \
-   ca-certificates \
-   cmake \
-   make \
-   git \
-   gcc \
-   zlib1g-dev \
-   build-essential && \
- apt-get autoclean && rm -rf /var/lib/apt/lists/*
+# otherwise tzdata won't install
+ARG DEBIAN_FRONTEND=noninteractive
 
-# Download and extract the Raven release
-RUN wget https://github.com/lbcb-sci/raven/archive/refs/tags/${RAVEN_VER}.tar.gz && \
-   tar -xzvf ${RAVEN_VER}.tar.gz && \
-   mv -v raven-${RAVEN_VER} /raven && \
-   mkdir /data
+RUN apt-get update && apt-get install --no-install-recommends -y \
+  wget \
+  ca-certificates \
+  procps && \
+  apt-get autoclean && rm -rf /var/lib/apt/lists/*
 
-# Build the Raven release and test (does NOT build python bindings)
-RUN cd /raven && \
-   cmake -S ./ -B./build \
-    -DRAVEN_BUILD_EXE=1 \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DRAVEN_BUILD_TESTS=1 && \
-   cmake --build ./build && \
-   cmake --install ./build
+RUN micromamba install --yes --name base -c conda-forge -c bioconda \
+  raven-assembler=${RAVEN_VER} && \
+  micromamba clean -a -y
 
-# Use for e.g. $PATH and locale settings for compatibility with Singularity
-ENV PATH="/raven-${SOFTWARENAME_VER}/bin:$PATH" \
- LC_ALL=C
+ENV PATH="/opt/conda/bin/:${PATH}" \
+  LC_ALL=C.UTF-8
 
-RUN raven --version
-
+# final working directory in "app" layer is /data for passing data in/out of container
 WORKDIR /data
