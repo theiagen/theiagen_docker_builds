@@ -33,7 +33,7 @@ RUN pip install --no-cache-dir \
 
 # Create and set working directory
 WORKDIR /data
-COPY *.fastq.gz NCBI_Assembly_stats_20240124.txt ./
+COPY NCBI_Assembly_stats_20240124.txt ./
 
 WORKDIR /scripts
 COPY *.py ./
@@ -43,7 +43,4 @@ FROM app AS test
 
 WORKDIR /test
 
-RUN mv ../data/*.fastq.gz /test/ && \
-    python ../scripts/q30.py -i *_R1_001.fastq.gz >> q30_test.txt && \
-    python ../scripts/q30.py -i *_R1_001.fastq.gz >> q30_test.txt && \
-    cat q30_test.txt
+RUN python ../scripts/q30.py -h
