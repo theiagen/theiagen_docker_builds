@@ -1,6 +1,7 @@
 FROM ubuntu:jammy AS app
 
 ARG ARLN_STATS_VERSION="0.1.0"
+ARG NCBI_ASSEMBLY_STATS_VERSION="20240124"
 
 # Metadata
 LABEL base.image="ubuntu:jammy"
@@ -33,7 +34,7 @@ RUN pip install --no-cache-dir \
 
 # Create and set working directory
 WORKDIR /data
-COPY NCBI_Assembly_stats_20240124.txt ./
+COPY NCBI_Assembly_stats_${NCBI_ASSEMBLY_STATS_VERSION}.txt ./
 
 WORKDIR /scripts
 COPY *.py ./
