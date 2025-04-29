@@ -41,7 +41,7 @@ ENV PATH="/opt/conda/bin/:${PATH}" \
 
 WORKDIR /scripts
 COPY *.py ./
-RUN chmod +x /scripts/* 
+RUN chmod +x *.py 
 
 ENV PATH="${PATH}:/scripts"
 

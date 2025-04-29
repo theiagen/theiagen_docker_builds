@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import allel
+#import allel
 import numpy as np
 
 import re
@@ -41,6 +41,7 @@ elif gfffile is not None:
     getname = re.compile(r'.*?gene=([^;]*);.*')
 
     rangetab=pd.read_csv(gfffile, sep='\t', comment="#")
+    print(rangetab)
     for i in range(0,len(rangetab)):
         st = int(rangetab.iloc[i,3])
         en = int(rangetab.iloc[i,4])
