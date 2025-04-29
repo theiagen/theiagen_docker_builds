@@ -35,8 +35,14 @@ RUN curl https://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/edirect.tar.gz --outpu
     tar xzf edirect.tar.gz && \
     rm edirect.tar.gz 
 
-
 ENV PATH=/edirect:${PATH}
+
+RUN curl -o datasets 'https://ftp.ncbi.nlm.nih.gov/pub/datasets/command-line/v2/linux-amd64/datasets' && \
+    curl -o dataformat 'https://ftp.ncbi.nlm.nih.gov/pub/datasets/command-line/v2/linux-amd64/dataformat' && \
+    chmod +x datasets dataformat 
+
+ENV PATH=/datasets:${PATH}
+ENV PATH=/dataformat:${PATH}
 
 # Tell gcloud to save state in /.config so it's easy to override as a mounted volume.
 ENV HOME=/
