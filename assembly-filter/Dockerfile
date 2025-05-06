@@ -7,11 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /scripts
 
-COPY assembly-shovilter.py /scripts/assembly-shovilter.py
+COPY assembly-shovilter.py /scripts/assembly_shovilter.py
 
 RUN chmod +x /scripts/assembly-shovilter.py
 
 # Only depend on biopython
 RUN pip install --no-cache-dir biopython
 
-ENTRYPOINT ["python", "/scripts/assembly-shovilter.py"]
+ENTRYPOINT ["python", "/scripts/assembly_shovilter.py"]
