@@ -195,7 +195,7 @@ def get_taxon_id_from_ncbi(organism):
         logger.warning(f"Error querying NCBI Taxonomy API for organism '{organism}': {e}")
         return None
 
-def validate_metadata(metadata_df, checklist_id, sample_id_column, column_mappings=None, allow_missing=False):
+def validate_metadata(metadata_df, checklist_id, sample_id_column, allow_missing=False):
     """Validate metadata against checklist requirements
     
     Returns:
@@ -229,8 +229,6 @@ def validate_metadata(metadata_df, checklist_id, sample_id_column, column_mappin
     
     # Merge default with custom mappings
     field_mapping = default_field_mapping.copy()
-    if column_mappings:
-        field_mapping.update(column_mappings)
     
     for idx, row in metadata_df.iterrows():
         # I think these are all valid sample aliases, I guess if for somereason the sample_id_column is not in the row
@@ -323,7 +321,7 @@ def add_sample_attribute(sample_attributes, tag, value, units=None):
     
     return True
 
-def generate_sample_xml(metadata_df, checklist_id, sample_id_column, center_name=None, column_mappings=None):
+def generate_sample_xml(metadata_df, checklist_id, sample_id_column, center_name=None):
     """Generate sample XML for ENA submission"""
     
     sample_set = ET.Element("SAMPLE_SET")
@@ -393,9 +391,6 @@ def generate_sample_xml(metadata_df, checklist_id, sample_id_column, center_name
     
     # Merge with custom mappings if provided
     field_mapping = default_field_mapping.copy()
-    if column_mappings:
-        # This will overwrite any default mappings with custom ones provided
-        field_mapping.update(column_mappings)
     
     for idx, row in metadata_df.iterrows():
         # Get sample alias and title, same as in validate_metadata
@@ -677,6 +672,17 @@ def main():
     # Grab everything we need from one place -- either way will be user provided on way or the other
     if 'study_accession' not in metadata_for_ena_df.columns:
         metadata_for_ena_df['study_accession'] = args.study
+        
+    # Let's apply the column mappings upfront
+    if column_mappings:
+        mapped_df = metadata_for_ena_df.copy()
+        
+        for orig_col, mapped_col in column_mappings.items():
+            if orig_col in metadata_for_ena_df.columns:
+                mapped_df[mapped_col] = metadata_for_ena_df[orig_col]
+        
+        # Use the mapped dataframe for further processing
+        metadata_for_ena_df = mapped_df
     
     # Get checklist ID for sample type
     checklist_id = CHECKLIST_MAPPING.get(args.sample_type)
@@ -689,7 +695,6 @@ def main():
         metadata_for_ena_df, 
         checklist_id,
         args.sample_id_column,
-        column_mappings, 
         args.allow_missing
     )
     
@@ -722,8 +727,7 @@ def main():
             batch_df, 
             checklist_id,
             args.sample_id_column,
-            args.center, 
-            column_mappings
+            args.center
         )
         
         submission_xml = generate_submission_xml()

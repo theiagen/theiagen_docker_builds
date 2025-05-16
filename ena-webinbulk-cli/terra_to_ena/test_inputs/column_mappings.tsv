@@ -7,6 +7,7 @@ library_source	library_source
 library_selection	library_selection
 library_strategy	library_strategy
 insert_size	insert_size
+title_test	title
 sequencing_platform	sequencing_platform
 sequencing_instrument	sequencing_instrument
 description	library_description
