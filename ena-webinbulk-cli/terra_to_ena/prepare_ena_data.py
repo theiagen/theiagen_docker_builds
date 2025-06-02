@@ -358,6 +358,9 @@ def main():
         logger.info("No samples remain after filtering out those with missing metadata")
         sys.exit(1)
     
+    # Drop any columns that are completely filled with empty strings.
+    ena_spreadsheet = ena_spreadsheet.loc[:, ~(ena_spreadsheet == "").all()]
+
     # Write the ENA spreadsheet
     ena_spreadsheet.to_csv(args.output, sep="\t", index=False)
     logger.info(f"Created ENA reads spreadsheet with {len(ena_spreadsheet)} samples")
