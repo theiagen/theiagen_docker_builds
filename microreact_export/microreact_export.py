@@ -293,9 +293,9 @@ def main():
         id_column=args.id_column,
         tree_files=args.tree_files
     )
-    with open("microreact_update_response.json", "w", encoding="utf-8") as response_file:
+    with open("microreact_response.json", "w", encoding="utf-8") as response_file:
       json.dump(microreact_response.json(), response_file, ensure_ascii=False, indent=2)
-    with open("updated_project_input.json", "w", encoding="utf-8") as project_file:
+    with open("project_input.json", "w", encoding="utf-8") as project_file:
       project_file.write(json.dumps(updated_project))
   else:
     microreact_response, project_json = create_microreact_project(
