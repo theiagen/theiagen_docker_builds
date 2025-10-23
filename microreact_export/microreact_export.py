@@ -304,8 +304,7 @@ def main():
       restricted_access=args.restricted_access,
       project_name=args.project_name,
       id_column=args.id_column,
-      selected_columns=args.selected_columns,
-      project_url=args.project_url
+      selected_columns=args.selected_columns
     )
     with open("microreact_response.json", "w", encoding="utf-8") as response_file:
       json.dump(microreact_response, response_file, ensure_ascii=False, indent=2)
