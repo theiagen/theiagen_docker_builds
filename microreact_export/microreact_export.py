@@ -222,12 +222,10 @@ def update_microreact_project(
   get_response = requests.get(get_url, headers=get_request_headers)
   updated_project = get_response.json()
   logger.info(f"Fetched current project data for update")
-
   if metadata:
     metadata_entry, metadata_id, headers = create_project_entry("metadata", metadata, id_column, None, None)
 
     if "latitude" in headers and "longitude" in headers:
-      print(updated_project.get("maps"))
       if updated_project.get("maps") is None:
         map_entry = create_project_entry("map", None, "", None, None)
         updated_project["maps"] = {
@@ -261,7 +259,10 @@ def update_microreact_project(
   if tree_files:
     tree_files_dict, tree_dict = create_project_entry("tree", None, id_column, None, tree_files)
     updated_project["files"].update(tree_files_dict)
-    updated_project["trees"].update(tree_dict)
+    if "trees" not in updated_project:
+      updated_project["trees"] = tree_dict
+    else:
+      updated_project["trees"].update(tree_dict)
     logger.info("Updated project with new tree files")
 
   post_headers = {
