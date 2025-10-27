@@ -11,9 +11,10 @@ import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
-def parse_metadata_tsv(tsv: Path, id_column: str, selected_columns: Optional[List[str]] = None):
+def parse_metadata_tsv(tsv: Path, id_column: str, remove_file_columns: bool = True, selected_columns: Optional[List[str]] = None, date_column: Optional[str] = None):
   with open(tsv, 'r', newline='', encoding='utf-8') as f:
     df = pd.read_csv(f, sep="\t", dtype=str)
+
     logger.debug(f"selected_columns: {selected_columns}")
     logger.info(f"Original metadata TSV has {len(df)} records and columns: {df.columns.tolist()}")
     if selected_columns:
@@ -23,6 +24,19 @@ def parse_metadata_tsv(tsv: Path, id_column: str, selected_columns: Optional[Lis
       data = df
     logger.info(f"Parsed metadata TSV with {len(data)} records and columns: {data.columns.tolist()}")
     logger.info(f"First few rows of data:\n{data.head()}")
+    
+    if date_column:
+      logger.info(f"Validating date column: {date_column}")
+      df[date_column] = pd.to_datetime(df[date_column], errors='raise')
+      logger.info(f"Date column '{date_column}' validated successfully.")
+
+    if remove_file_columns:
+      logger.info("Removing columns that contain file URLs.")
+      for col in data.columns:
+        if data[col].astype(str).str.startswith(('http://', 'https://', 's3://', 'gs://', 'ftp://')).any():
+          logger.info(f"Removing column '{col}' as it to contain file URLs.")
+          data = data.drop(columns=[col])
+
     csv_data = data.to_csv(index=False)
     f.close()
   
@@ -41,6 +55,7 @@ def encode(data: str) -> str:
   return encoded_data, file_id
 
 def add_trees(tree_files: List[Path], id_column: str):
+  print(tree_files)
   tree_files_dict = {}
   tree_dict = {}
   for tree_file in tree_files:
@@ -64,18 +79,20 @@ def add_trees(tree_files: List[Path], id_column: str):
           "showLeafLabels": True,
           "file": tree_id
       }
-    return tree_files_dict, tree_dict
+  return tree_files_dict, tree_dict
 
 def create_project_entry(
-  entry_type: str, 
-  metadata: Optional[Path], 
-  id_column: str, 
-  selected_columns: Optional[List[str]],
-  tree_files: Optional[List[Path]]
+  entry_type: str,
+  id_column: str,
+  remove_file_columns: Optional[bool] = True,
+  metadata: Optional[Path] = None, 
+  date_column: Optional[str] = None, 
+  selected_columns: Optional[List[str]] = None,
+  tree_files: Optional[List[Path]] = None
 ):
   if entry_type == "metadata":
     logger.info("Creating metadata entry")
-    metadata_parsed, headers, id_column = parse_metadata_tsv(metadata, id_column, selected_columns)
+    metadata_parsed, headers, id_column = parse_metadata_tsv(metadata, id_column, remove_file_columns, selected_columns, date_column)
     metadata_encoded, entry_id = encode(metadata_parsed)
     metadata_entry = {}
     metadata_entry[entry_id] = {
@@ -112,14 +129,16 @@ def create_project_entry(
 def create_microreact_project(
     metadata: Path,
     id_column: str,
+    date_column: Optional[str],
     tree_files: Optional[List[Path]],
     access_token: Optional[str],
     restricted_access: bool = True,
+    remove_file_columns: bool = True,
     project_name: str = "New Microreact Project",
     selected_columns: Optional[List[str]] = None
 ):
 
-  metadata_entry, metadata_id, headers = create_project_entry("metadata", metadata, id_column, selected_columns, None)
+  metadata_entry, metadata_id, headers = create_project_entry("metadata",  id_column, remove_file_columns, metadata, date_column, selected_columns, None)
 
   # Create Metadata Dataset and Table Entries
   dataset_id = str(uuid.uuid4())
@@ -139,13 +158,13 @@ def create_microreact_project(
   }    
 
   if tree_files:
-    tree_files_dict, tree_dict = create_project_entry("tree", None, id_column, None, tree_files)
+    tree_files_dict, tree_dict = create_project_entry("tree",id_column, remove_file_columns, None, None, None, tree_files)
   else:
     logger.info("No tree files provided; skipping tree entry creation.")
     tree_files_dict, tree_dict = {}, {}
   
   if "latitude" in headers and "longitude" in headers:
-    map_entry = create_project_entry("map", None, "", None, None)
+    map_entry = create_project_entry("map", "", None, None, None, None)
     logger.info("Map entry created based on presence of latitude and longitude in metadata.")
   else:
     logger.info("No latitude/longitude fields found; skipping map entry creation.")
@@ -211,6 +230,8 @@ def update_microreact_project(
     access_token: str,
     metadata: Optional[str],
     id_column: Optional[str],
+    date_column: Optional[str],
+    remove_file_columns: bool,
     tree_files: Optional[List[Path]]
 ):
   logger.info(f"Updating existing Microreact project at {project_url}")
@@ -223,11 +244,11 @@ def update_microreact_project(
   updated_project = get_response.json()
   logger.info(f"Fetched current project data for update")
   if metadata:
-    metadata_entry, metadata_id, headers = create_project_entry("metadata", metadata, id_column, None, None)
+    metadata_entry, metadata_id, headers = create_project_entry("metadata", id_column, date_column, remove_file_columns, metadata, None, None, None)
 
     if "latitude" in headers and "longitude" in headers:
       if updated_project.get("maps") is None:
-        map_entry = create_project_entry("map", None, "", None, None)
+        map_entry = create_project_entry("map", "", None, None, None, None)
         updated_project["maps"] = {
           **updated_project.get("maps", {}),
           **map_entry
@@ -257,7 +278,7 @@ def update_microreact_project(
     logger.info("Updated project with new metadata")
   
   if tree_files:
-    tree_files_dict, tree_dict = create_project_entry("tree", None, id_column, None, tree_files)
+    tree_files_dict, tree_dict = create_project_entry("tree",id_column, remove_file_columns, None, None, None, tree_files)
     updated_project["files"].update(tree_files_dict)
     if "trees" not in updated_project:
       updated_project["trees"] = tree_dict
@@ -282,7 +303,9 @@ def main():
   argparser.add_argument("--access_token", type=str, help="Access token for Microreact API")
   argparser.add_argument("--restricted_access", type=bool, default=True, help="Set project access to private if True")
   argparser.add_argument("--update", type=bool, default=False, help="Update an existing Microreact project if True, pair with --project_url")
+  argparser.add_argument("--remove_file_columns", type=bool, default=True, help="Remove columns associated with cloud URLs if True")
   argparser.add_argument("--id_column", type=str, help="Column to use as the unique ID field")
+  argparser.add_argument("--date_column", type=str, help="Column name for date usage and validation")
   args = argparser.parse_args()
 
   if args.update and args.project_url:
@@ -291,6 +314,8 @@ def main():
         access_token=args.access_token,
         metadata=args.metadata_tsv,
         id_column=args.id_column,
+        date_column=args.date_column,
+        remove_file_columns=args.remove_file_columns,
         tree_files=args.tree_files
     )
     with open("microreact_response.json", "w", encoding="utf-8") as response_file:
@@ -305,6 +330,8 @@ def main():
       restricted_access=args.restricted_access,
       project_name=args.project_name,
       id_column=args.id_column,
+      date_column=args.date_column,
+      remove_file_columns=args.remove_file_columns,
       selected_columns=args.selected_columns
     )
     with open("microreact_response.json", "w", encoding="utf-8") as response_file:
