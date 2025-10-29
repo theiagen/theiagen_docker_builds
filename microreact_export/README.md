@@ -1,4 +1,4 @@
-# Terra_2_Microreact
+# Microreact_Export
 
 `microreact_export.py` creates, updates, and submits Microreact project files in JSON format.
 

@@ -205,7 +205,7 @@ def create_microreact_project(
 
   # Write Input to JSON
   project_input_json = json.dumps(project_input)
-  logger.info(f"Created Microreact project JSON")
+  logger.info("Created Microreact project JSON")
 
   if access_token:
     url = "https://microreact.org/api/projects/create"
@@ -242,7 +242,7 @@ def update_microreact_project(
   }
   get_response = requests.get(get_url, headers=get_request_headers)
   updated_project = get_response.json()
-  logger.info(f"Fetched current project data for update")
+  logger.info("Fetched current project data for update")
   if metadata:
     metadata_entry, metadata_id, headers = create_project_entry("metadata", id_column, date_column, remove_file_columns, metadata, None, None, None)
 
