@@ -193,7 +193,7 @@ def create_microreact_project(
     tree_files_dict, tree_dict = {}, {}
 
   if headers is not None:
-    if any(field.lower() == "latitude" or field.lower() == "longitude" for field in headers):
+    if any("latitude" in field.lower() or "longitude" in field.lower() for field in headers):
       map_entry = create_map_entry()
       logger.info("Map entry created based on presence of latitude and longitude in metadata.")
     else:
