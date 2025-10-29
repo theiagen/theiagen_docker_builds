@@ -376,8 +376,8 @@ def main():
 
   try:
     if project_json is not None:
-      with open("project_input.json", "w", encoding="utf-8") as project_file:
-        project_file.write(json.dumps(project_json))
+      with open(f"{args.project_name}_input.microreact", "w", encoding="utf-8") as project_file:
+        project_file.write(project_json)
     else:
       logger.error("Updated project is None; cannot write to file.")
   except Exception as e:
