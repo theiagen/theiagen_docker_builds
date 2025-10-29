@@ -30,8 +30,10 @@ def parse_metadata_tsv(tsv: Path, id_column: str, remove_file_columns: bool = Tr
         if date_column:
           if date_column in df.columns:
             logger.info(f"Validating date column: {date_column}")
-            df[date_column] = pd.to_datetime(df[date_column], errors='raise')
+            df[date_column] = pd.to_datetime(df[date_column], errors='coerce')
             logger.info(f"Date column '{date_column}' validated successfully.")
+            if df[date_column].isnull().any():
+              logger.warning(f"Some entries in date column '{date_column}' could not be parsed and were set to NaT.")
           else:
             logger.warning(f"Date column '{date_column}' not found in metadata; skipping date validation.")
         else:
