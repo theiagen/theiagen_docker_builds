@@ -189,8 +189,6 @@ def create_microreact_project(
   matrix_file: Optional[Path],
   date_column: Optional[str],
   tree_files: Optional[List[Path]],
-  access_token: Optional[str],
-  restricted_access: bool = True,
   remove_file_columns: bool = True,
   project_name: str = "New Microreact Project",
   selected_columns: Optional[List[str]] = None
@@ -287,7 +285,15 @@ def create_microreact_project(
   project_input_json = json.dumps(project_input)
   logger.info("Created Microreact project JSON")
 
+  return project_input_json
+
+def submit_microreact_project(
+  project_input: dict,
+  access_token: str,
+  restricted_access: bool = True
+) -> dict:
   if access_token:
+    logger.info("Access token provided, submitting Microreact project via API")
     url = "https://microreact.org/api/projects/create"
     if restricted_access:
       url += "?access=private"
@@ -303,7 +309,7 @@ def create_microreact_project(
     else:
       logger.error(f"Failed to create Microreact project: {response.text}")
 
-  return microreact_response, project_input_json
+  return microreact_response
 
 def update_microreact_project(
   project_url: str,
@@ -401,31 +407,37 @@ def main():
         tree_files=args.tree_files
     )
   else:
-    microreact_response, project_json = create_microreact_project(
+    project_json = create_microreact_project(
       metadata=args.metadata_tsv,
       matrix_file=args.matrix_file,
       tree_files=args.tree_files,
-      access_token=args.access_token,
-      restricted_access=args.restricted_access,
       project_name=args.project_name,
       id_column=args.id_column,
       date_column=args.date_column,
       remove_file_columns=args.remove_file_columns,
       selected_columns=args.selected_columns
     )
-  try:
-    if microreact_response is not None:
-      if hasattr(microreact_response, "json"):
-        microreact_response_json = microreact_response.json()
-      else:
-        microreact_response_json = microreact_response
-      with open("microreact_response.json", "w", encoding="utf-8") as response_file:
-        json.dump(microreact_response_json, response_file, ensure_ascii=False, indent=2)
-    else:
-      logger.error("Microreact response is None; cannot write to file.")
-  except Exception as e:
-    logger.error(f"Error writing Microreact response to file: {e}")
+    if args.access_token:
+      microreact_response = submit_microreact_project(
+        project_input=json.loads(project_json),
+        access_token=args.access_token,
+        restricted_access=args.restricted_access
+      )
 
+      try:
+        if microreact_response is not None:
+          if hasattr(microreact_response, "json"):
+            microreact_response_json = microreact_response.json()
+          else:
+            microreact_response_json = microreact_response
+          with open("microreact_response.json", "w", encoding="utf-8") as response_file:
+            json.dump(microreact_response_json, response_file, ensure_ascii=False, indent=2)
+        else:
+          logger.error("Microreact response is None; cannot write to file.")
+      except Exception as e:
+        logger.error(f"Error writing Microreact response to file: {e}")
+    else:
+      logger.info("No access token provided; skipping project submission.")   
   try:
     if project_json is not None:
       with open(f"{args.project_name}_input.microreact", "w", encoding="utf-8") as project_file:
