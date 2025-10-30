@@ -146,9 +146,47 @@ def create_map_entry() -> dict:
   }
   return map_entry
 
+def create_matrix_entry(
+  matrix_file: Path
+) -> tuple[dict, dict]:
+  try:
+    if matrix_file is not None:
+      with open(matrix_file, 'r', encoding='utf-8') as mf:
+        matrix_content = mf.read()
+        matrix_encoded, matrix_id = encode(matrix_content)
+        logger.info(f"Matrix file encoded with ID: {matrix_id}")
+        matrix_file_entry = {}
+        matrix_entry = {}
+        logger.info("Creating matrix file entry")
+        matrix_file_entry[matrix_id] = {
+            "blob": matrix_encoded,
+            "format": "text/csv",
+            "id": matrix_id,
+            "name": matrix_file.name,
+            "type": "matrix"
+        }
+        logger.info("Creating matrix entry")
+        matrix_entry[f"matrix_{matrix_id}"] = {
+          "controls": True,
+          "labelsFontSize": 12,
+          "axisLabelsFontSize": 12,
+          "showLabels": False,
+          "truncateLabels": True,
+          "rotateAxisLabels": 90,
+          "title": "Matrix",
+          "paneId": "matrix-panel",
+          "file": matrix_id
+        }
+        logger.info("Matrix entries created successfully")
+  except Exception as e:
+    logger.error(f"Error creating matrix entry: {e}")
+    raise e
+  return matrix_file_entry, matrix_entry
+
 def create_microreact_project(
   metadata: Path,
   id_column: str,
+  matrix_file: Optional[Path],
   date_column: Optional[str],
   tree_files: Optional[List[Path]],
   access_token: Optional[str],
@@ -194,6 +232,13 @@ def create_microreact_project(
     logger.info("No tree files provided; skipping tree entry creation.")
     tree_files_dict, tree_dict = {}, {}
 
+  if matrix_file is not None:
+    logger.info(f"Matrix file provided: {matrix_file.name}")
+    matrix_file_entry, matrix_entry = create_matrix_entry(matrix_file)
+  else:
+    logger.info("No matrix file provided; skipping matrix entry creation.")
+    matrix_file_entry, matrix_entry = {}, {}
+
   if headers is not None:
     if any("latitude" in field.lower() or "longitude" in field.lower() for field in headers):
       map_entry = create_map_entry()
@@ -212,7 +257,8 @@ def create_microreact_project(
     },
     "files": {
       **metadata_entry,
-      **tree_files_dict
+      **tree_files_dict,
+      **matrix_file_entry
     },
     "tables": {
       table_id: table_entry
@@ -222,6 +268,9 @@ def create_microreact_project(
     },
     "charts": {},
     "filters": {},
+    "matrices": {
+      **matrix_entry
+    },
     "maps": {
       **map_entry
     },
@@ -231,8 +280,7 @@ def create_microreact_project(
     "slicers": {},
     "styles": {},
     "timelines": {},
-    "views": {},
-    "matrices": {}
+    "views": {}
   }
 
   # Write Input to JSON
@@ -331,6 +379,7 @@ def main():
   argparser.add_argument("--project_name", type=str, help="Name of the Microreact project")
   argparser.add_argument("--project_url", type=str, help="URL of the Microreact project, used for updating existing projects")
   argparser.add_argument("--metadata_tsv", type=Path, help="Path to the metadata file")
+  argparser.add_argument("--matrix_file", type=Path, help="Path to the distance matrix file")
   argparser.add_argument("--tree_files", nargs="*", type=Path, help="Paths to the tree files")
   argparser.add_argument("--selected_columns", nargs="*", type=str, help="Columns to include in the Microreact table")
   argparser.add_argument("--access_token", type=str, help="Access token for Microreact API")
@@ -354,6 +403,7 @@ def main():
   else:
     microreact_response, project_json = create_microreact_project(
       metadata=args.metadata_tsv,
+      matrix_file=args.matrix_file,
       tree_files=args.tree_files,
       access_token=args.access_token,
       restricted_access=args.restricted_access,
