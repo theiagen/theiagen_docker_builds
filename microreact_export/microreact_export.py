@@ -11,6 +11,28 @@ import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
+json_scheme = {
+  "schema": "https://microreact.org/schema/v1.json",
+  "meta": {
+    "name": {}
+  },
+  "datasets": {},
+  "files": {},
+  "tables": {},
+  "trees": {},
+  "charts": {},
+  "filters": {},
+  "matrices": {},
+  "maps": {},
+  "networks": {},
+  "notes": {},
+  "panes": {},
+  "slicers": {},
+  "styles": {},
+  "timelines": {},
+  "views": {}
+}
+
 def parse_metadata_tsv(tsv: Path, id_column: str, remove_file_columns: bool = True, selected_columns: Optional[List[str]] = None, date_column: Optional[str] = None):
   try:
     if tsv is not None:
@@ -69,6 +91,15 @@ def encode(data: str) -> tuple[str, str]:
   file_id = str(uuid.uuid4())
   logger.info(f"File encoded with ID: {file_id}")
   return encoded_data, file_id
+
+def add_entry(project: dict, section: str, entry_data: dict) -> dict:
+  if section not in project:
+    project[section] = entry_data
+    logger.info(f"Added new section '{section}' to project.")
+  else:
+    project[section].update(entry_data)
+    logger.info(f"Updated existing section '{section}' in project.")
+  return project
 
 def add_trees(tree_files: List[Path], id_column: str) -> tuple[dict, dict]:
   tree_files_dict = {}
@@ -183,110 +214,6 @@ def create_matrix_entry(
     raise e
   return matrix_file_entry, matrix_entry
 
-def create_microreact_project(
-  metadata: Path,
-  id_column: str,
-  matrix_file: Optional[Path],
-  date_column: Optional[str],
-  tree_files: Optional[List[Path]],
-  remove_file_columns: bool = True,
-  project_name: str = "New Microreact Project",
-  selected_columns: Optional[List[str]] = None
-):
-
-  metadata_entry, metadata_id, headers = create_metadata_entry(id_column, remove_file_columns, metadata, date_column, selected_columns)
-
-  # Create Metadata Dataset and Table Entries
-  dataset_id = str(uuid.uuid4())
-  logger.info(f"Created dataset entry with ID {dataset_id}, linked to metadata file ID {metadata_id}")
-  dataset_entry = {
-    "id": dataset_id,
-    "file": metadata_id,
-    "idFieldName": id_column
-  }
-  if selected_columns is not None and headers is not None:
-    columns = []
-    for col in selected_columns:
-      if col in headers:
-        logger.info(f"Selected column '{col}' found in metadata headers.")
-        columns.append({"field": col})
-      else:
-        logger.warning(f"Selected column '{col}' not found in metadata headers.")
-  else:
-    logger.info("No selected columns provided; including all metadata columns in table.")
-    columns = [{"field": col} for col in headers] if headers is not None else []
-
-  table_id = str(uuid.uuid4())
-  logger.info(f"Created table entry with ID {table_id}, linked to metadata file ID {metadata_id}")
-  table_entry = {
-    "title": "Metadata",
-    "file": metadata_id,
-    "columns": columns
-  }    
-
-  if tree_files:
-    tree_files_dict, tree_dict = add_trees(tree_files, id_column)
-  else:
-    logger.info("No tree files provided; skipping tree entry creation.")
-    tree_files_dict, tree_dict = {}, {}
-
-  if matrix_file is not None:
-    logger.info(f"Matrix file provided: {matrix_file.name}")
-    matrix_file_entry, matrix_entry = create_matrix_entry(matrix_file)
-  else:
-    logger.info("No matrix file provided; skipping matrix entry creation.")
-    matrix_file_entry, matrix_entry = {}, {}
-
-  if headers is not None:
-    if any("latitude" in field.lower() or "longitude" in field.lower() for field in headers):
-      map_entry = create_map_entry()
-      logger.info("Map entry created based on presence of latitude and longitude in metadata.")
-    else:
-      logger.info("No latitude/longitude fields found; skipping map entry creation.")
-      map_entry = {}
-
-  project_input = {
-    "schema": "https://microreact.org/schema/v1.json",
-    "meta": {
-      "name": project_name
-    },
-    "datasets": {
-      dataset_id: dataset_entry
-    },
-    "files": {
-      **metadata_entry,
-      **tree_files_dict,
-      **matrix_file_entry
-    },
-    "tables": {
-      table_id: table_entry
-    },
-    "trees": {
-      **tree_dict
-    },
-    "charts": {},
-    "filters": {},
-    "matrices": {
-      **matrix_entry
-    },
-    "maps": {
-      **map_entry
-    },
-    "networks": {},
-    "notes": {},
-    "panes": {},
-    "slicers": {},
-    "styles": {},
-    "timelines": {},
-    "views": {}
-  }
-
-  # Write Input to JSON
-  project_input_json = json.dumps(project_input)
-  logger.info("Created Microreact project JSON")
-
-  return project_input_json
-
 def submit_microreact_project(
   project_input: dict,
   access_token: str,
@@ -380,6 +307,81 @@ def update_microreact_project(
   post_response = requests.post(url, headers=post_headers, json=updated_project)
   return post_response, updated_project
 
+def create_microreact_project(
+  metadata: Path,
+  id_column: str,
+  matrix_file: Optional[Path],
+  date_column: Optional[str],
+  tree_files: Optional[List[Path]],
+  remove_file_columns: bool = True,
+  project_name: str = "New Microreact Project",
+  selected_columns: Optional[List[str]] = None,
+  json_scheme: dict = json_scheme
+):
+  json_scheme["meta"]["name"] = project_name
+  logger.info(f"Set project name to: {project_name}")
+
+  metadata_entry, metadata_id, headers = create_metadata_entry(id_column, remove_file_columns, metadata, date_column, selected_columns)
+  json_scheme = add_entry(json_scheme, "files", metadata_entry)
+
+  # Create Metadata Dataset and Table Entries
+  dataset_id = str(uuid.uuid4())
+  logger.info(f"Created dataset entry with ID {dataset_id}, linked to metadata file ID {metadata_id}")
+  dataset_entry = {
+    "id": dataset_id,
+    "file": metadata_id,
+    "idFieldName": id_column
+  }
+  json_scheme = add_entry(json_scheme, "datasets", {dataset_id: dataset_entry})
+  if selected_columns is not None and headers is not None:
+    columns = []
+    for col in selected_columns:
+      if col in headers:
+        logger.info(f"Selected column '{col}' found in metadata headers.")
+        columns.append({"field": col})
+      else:
+        logger.warning(f"Selected column '{col}' not found in metadata headers.")
+  else:
+    logger.info("No selected columns provided; including all metadata columns in table.")
+    columns = [{"field": col} for col in headers] if headers is not None else []
+
+  table_id = str(uuid.uuid4())
+  logger.info(f"Created table entry with ID {table_id}, linked to metadata file ID {metadata_id}")
+  table_entry = {
+    "title": "Metadata",
+    "file": metadata_id,
+    "columns": columns
+  }    
+  json_scheme = add_entry(json_scheme, "tables", {table_id: table_entry})
+  if tree_files:
+    tree_files_dict, tree_dict = add_trees(tree_files, id_column)
+    json_scheme = add_entry(json_scheme, "files", tree_files_dict)
+    json_scheme = add_entry(json_scheme, "trees", tree_dict)
+  else:
+    logger.info("No tree files provided; skipping tree entry creation.")
+
+  if matrix_file is not None:
+    logger.info(f"Matrix file provided: {matrix_file.name}")
+    matrix_file_entry, matrix_entry = create_matrix_entry(matrix_file)
+    json_scheme = add_entry(json_scheme, "files", matrix_file_entry)
+    json_scheme = add_entry(json_scheme, "matrices", matrix_entry)
+  else:
+    logger.info("No matrix file provided; skipping matrix entry creation.")
+
+  if headers is not None:
+    if any("latitude" in field.lower() or "longitude" in field.lower() for field in headers):
+      map_entry = create_map_entry()
+      json_scheme = add_entry(json_scheme, "maps", map_entry)
+      logger.info("Map entry created based on presence of latitude and longitude in metadata.")
+    else:
+      logger.info("No latitude/longitude fields found; skipping map entry creation.")
+
+  # Write Input to JSON
+  project_input_json = json.dumps(json_scheme, ensure_ascii=False, indent=2)
+  logger.info("Created Microreact project JSON")
+
+  return project_input_json
+
 def main():
   argparser = argparse.ArgumentParser(description="Create a Microreact project from metadata and tree files.")
   argparser.add_argument("--project_name", type=str, help="Name of the Microreact project")
@@ -415,7 +417,8 @@ def main():
       id_column=args.id_column,
       date_column=args.date_column,
       remove_file_columns=args.remove_file_columns,
-      selected_columns=args.selected_columns
+      selected_columns=args.selected_columns,
+      json_scheme=json_scheme
     )
     if args.access_token:
       microreact_response = submit_microreact_project(
@@ -438,6 +441,7 @@ def main():
         logger.error(f"Error writing Microreact response to file: {e}")
     else:
       logger.info("No access token provided; skipping project submission.")   
+  
   try:
     if project_json is not None:
       with open(f"{args.project_name}_input.microreact", "w", encoding="utf-8") as project_file:
