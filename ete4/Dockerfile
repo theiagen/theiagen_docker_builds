@@ -5,7 +5,7 @@ FROM mambaorg/micromamba:2.3.0-ubuntu22.04 AS app
 # List all software versions are ARGs near the top of the dockerfile
 # 'ARG' sets environment variables during the build stage
 # 'ARG' variables are ONLY available during image build, they do not persist in the final image
-ARG ETE3_VERSION="3.1.1"
+ARG ETE4_VERSION="4.3.0"
 
 # build and run as root users since micromamba image has 'mambauser' set as the $USER
 USER root
@@ -16,14 +16,14 @@ WORKDIR /
 
 LABEL base.image="mambaorg/micromamba:2.3.0-ubuntu22.04"
 LABEL dockerfile.version="1"
-LABEL software="ETE3"
-LABEL software.version="${ETE3_VERSION}"
+LABEL software="ETE4"
+LABEL software.version="${ETE4_VERSION}"
 LABEL description="Hosts the ETE toolkit"
 LABEL maintainer="Zachary Konkel"
 LABEL maintainer.email="zachary.konkel@theiagen.com"
 
 # Install your desired software into the base conda/micromamba environment, pinning the version
-RUN micromamba install --name base bioconda:ete3=${SOFTWARENAME_VERSION} legacy-cgi && \
+RUN micromamba install --name base conda-forge::ete4=${ETE4_VERSION} && \
  micromamba clean -a -f -y && \
  mkdir /data
 
@@ -33,8 +33,10 @@ RUN micromamba install --name base bioconda:ete3=${SOFTWARENAME_VERSION} legacy-
 ENV PATH="/opt/conda/bin/:${PATH}" \
  LC_ALL=C.UTF-8
 
-# 'CMD' instructions set a default command when the container is run. This is typically 'tool --help.'
-CMD [ "ete3", "--help" ]
+# Pre-download the NCBI taxonomy database to avoid first-run download delays
+RUN python -c "from ete4 import NCBITaxa; ncbi = NCBITaxa()"
+
+CMD [ "ete4", "--help" ]
 
 # set final working directory to /data
 WORKDIR /data
