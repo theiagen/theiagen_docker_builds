@@ -42,6 +42,10 @@ ENV PATH=/opt/conda/envs/klebsiella_analysis/bin:$PATH
 COPY parse_kleborate_kleb.py /usr/local/bin/parse_kleborate_kleb.py
 RUN chmod +x /usr/local/bin/parse_kleborate_kleb.py
 
+# Copy the E. coli parsing script into the container
+COPY parse_kleborate_ecoli.py /usr/local/bin/parse_kleborate_ecoli.py
+RUN chmod +x /usr/local/bin/parse_kleborate_ecoli.py
+
 # Set the default command to bash
 CMD ["/bin/bash"]
 
