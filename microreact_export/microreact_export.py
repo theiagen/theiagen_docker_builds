@@ -36,6 +36,7 @@ json_scheme = {
 def parse_metadata_tsv(tsv: Path, id_column: str, remove_file_columns: bool = True, selected_columns: Optional[List[str]] = None, date_column: Optional[str] = None):
   try:
     if tsv is not None:
+      dates_validated = False
       logger.info(f"Parsing metadata TSV file.")
       with open(tsv, 'r', newline='', encoding='utf-8') as f:
         df = pd.read_csv(f, sep="\t", dtype=str)
@@ -52,10 +53,11 @@ def parse_metadata_tsv(tsv: Path, id_column: str, remove_file_columns: bool = Tr
         if date_column:
           if date_column in df.columns:
             logger.info(f"Validating date column: {date_column}")
-            df[date_column] = pd.to_datetime(df[date_column], errors='coerce')
+            df[f"{date_column}_validated"] = pd.to_datetime(df[date_column], errors='coerce')
             logger.info(f"Date column '{date_column}' validated successfully.")
-            if df[date_column].isnull().any():
-              logger.warning(f"Some entries in date column '{date_column}' could not be parsed and were set to NaT.")
+            dates_validated = True
+            if df[f"{date_column}_validated"].isnull().any():
+              logger.warning(f"Some entries in date column '{date_column}' could not be parsed and were set to NaT in {date_column}_validated.")
           else:
             logger.warning(f"Date column '{date_column}' not found in metadata; skipping date validation.")
         else:
@@ -84,7 +86,7 @@ def parse_metadata_tsv(tsv: Path, id_column: str, remove_file_columns: bool = Tr
   else:
     logger.info(f"ID column found, using specified ID column: {id_column}")
 
-  return csv_data, headers, id_column
+  return csv_data, headers, id_column, dates_validated
 
 def encode(data: str) -> tuple[str, str]:
   encoded_data = "data:application/octet-stream;base64," + base64.b64encode(data.encode('utf-8')).decode('utf-8')
@@ -137,16 +139,11 @@ def add_trees(tree_files: List[Path], id_column: str) -> tuple[dict, dict]:
   return tree_files_dict, tree_dict
 
 def create_metadata_entry(
-  id_column: str,
-  remove_file_columns: bool = True,
-  metadata: Optional[Path] = None, 
-  date_column: Optional[str] = None, 
-  selected_columns: Optional[List[str]] = None
-) -> tuple[dict, str, Optional[List[str]]]:
+  metadata_parsed: str, 
+  dates_validated: str,
+  date_column: Optional[str]
+) -> tuple[dict, dict, str]:
   logger.info("Creating metadata entry")
-  if metadata is None:
-    raise ValueError("Metadata file path must be provided for metadata entry creation.")
-  metadata_parsed, headers, id_column = parse_metadata_tsv(metadata, id_column, remove_file_columns, selected_columns, date_column)
   metadata_encoded, entry_id = encode(metadata_parsed)
   metadata_entry = {}
   metadata_entry[entry_id] = {
@@ -156,7 +153,22 @@ def create_metadata_entry(
       "name": "metadata.csv",
       "type": "data"
   }
-  return metadata_entry, entry_id, headers
+
+  timeline_dict = {}
+  if dates_validated:
+    timeline_dict[date_column] = {
+      "controls": False,
+      "nodeSize": 14,
+      "playing": False,
+      "speed": 1,
+      "style": "bar",
+      "title": date_column,
+      "paneId": date_column,
+      "dataType": "formatted-value",
+      "valueField": f"{date_column}_validated"
+    }
+
+  return metadata_entry, timeline_dict, entry_id
 
 def create_map_entry() -> dict:
   logger.info("Creating map entry")
@@ -257,7 +269,8 @@ def update_microreact_project(
   updated_project = get_response.json()
   logger.info("Fetched current project data for update")
   if metadata:
-    metadata_entry, metadata_id, headers = create_metadata_entry(id_column, remove_file_columns, metadata, date_column, None)
+    metadata_parsed, headers, id_column, dates_validated = parse_metadata_tsv(metadata, id_column, remove_file_columns, None, date_column)
+    metadata_entry, timeline_dict, metadata_id = create_metadata_entry(metadata_parsed, dates_validated, date_column)
 
     if any(field.lower() == "latitude" or field.lower() == "longitude" for field in headers):
       if updated_project.get("maps") is None:
@@ -299,13 +312,16 @@ def update_microreact_project(
       updated_project["trees"].update(tree_dict)
     logger.info("Updated project with new tree files")
 
+  if date_column:
+    updated_project["timelines"].update(timeline_dict)
+
   post_headers = {
     "Content-Type": "application/json; charset=UTF-8",
     "Access-Token": access_token
   }
   logger.info("Sending updated project data to Microreact API")
   post_response = requests.post(url, headers=post_headers, json=updated_project)
-  return post_response, updated_project
+  return post_response, json.dumps(updated_project)
 
 def create_microreact_project(
   metadata: Path,
@@ -320,10 +336,13 @@ def create_microreact_project(
 ):
   json_scheme["meta"]["name"] = project_name
   logger.info(f"Set project name to: {project_name}")
-
-  metadata_entry, metadata_id, headers = create_metadata_entry(id_column, remove_file_columns, metadata, date_column, selected_columns)
+  if metadata is None:
+    raise ValueError("Metadata file path must be provided for metadata entry creation.")
+  metadata_parsed, headers, id_column, dates_validated = parse_metadata_tsv(metadata, id_column, remove_file_columns, selected_columns, date_column)
+  metadata_entry, timeline_dict, metadata_id = create_metadata_entry(metadata_parsed, dates_validated, date_column)
   json_scheme = add_entry(json_scheme, "files", metadata_entry)
-
+  json_scheme = add_entry(json_scheme, "timelines", timeline_dict)
+  
   # Create Metadata Dataset and Table Entries
   dataset_id = str(uuid.uuid4())
   logger.info(f"Created dataset entry with ID {dataset_id}, linked to metadata file ID {metadata_id}")
