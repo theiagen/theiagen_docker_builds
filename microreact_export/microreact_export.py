@@ -103,7 +103,7 @@ def add_entry(project: dict, section: str, entry_data: dict) -> dict:
     logger.info(f"Updated existing section '{section}' in project.")
   return project
 
-def add_trees(tree_files: List[Path], id_column: str) -> tuple[dict, dict]:
+def create_tree_entry(tree_files: List[Path], id_column: str) -> tuple[dict, dict]:
   tree_files_dict = {}
   tree_dict = {}
   allowed_file_types = {".nwk", ".newick", ".tre", ".tree", ".treefile", ".nhx", ".nex", ".nexus"} 
@@ -190,37 +190,40 @@ def create_map_entry() -> dict:
   return map_entry
 
 def create_matrix_entry(
-  matrix_file: Path
+  matrix_files: List[Path]
 ) -> tuple[dict, dict]:
   try:
-    if matrix_file is not None:
-      with open(matrix_file, 'r', encoding='utf-8') as mf:
-        matrix_content = mf.read()
-        matrix_encoded, matrix_id = encode(matrix_content)
-        logger.info(f"Matrix file encoded with ID: {matrix_id}")
-        matrix_file_entry = {}
-        matrix_entry = {}
-        logger.info("Creating matrix file entry")
-        matrix_file_entry[matrix_id] = {
-            "blob": matrix_encoded,
-            "format": "text/csv",
-            "id": matrix_id,
-            "name": matrix_file.name,
-            "type": "matrix"
-        }
-        logger.info("Creating matrix entry")
-        matrix_entry[f"matrix_{matrix_id}"] = {
-          "controls": True,
-          "labelsFontSize": 12,
-          "axisLabelsFontSize": 12,
-          "showLabels": False,
-          "truncateLabels": True,
-          "rotateAxisLabels": 90,
-          "title": "Matrix",
-          "paneId": "matrix-panel",
-          "file": matrix_id
-        }
-        logger.info("Matrix entries created successfully")
+    if matrix_files is not None:
+      matrix_entry = {}
+      matrix_file_entry = {}
+      for matrix_file in matrix_files:
+        logger.info(f"Matrix file provided: {matrix_file.name}")
+        with open(matrix_file, 'r', encoding='utf-8') as f:
+          matrix_content = f.read()
+          matrix_encoded, matrix_id = encode(matrix_content)
+          logger.info(f"Matrix file encoded with ID: {matrix_id}")
+          logger.info("Creating matrix file entry")
+          matrix_file_entry[matrix_id] = {
+              "blob": matrix_encoded,
+              "format": "text/csv",
+              "id": matrix_id,
+              "name": matrix_file.name,
+              "type": "matrix"
+          }
+          logger.info("Creating matrix entry")
+          matrix_entry[f"matrix_{matrix_id}"] = {
+            "controls": True,
+            "labelsFontSize": 12,
+            "axisLabelsFontSize": 12,
+            "showLabels": False,
+            "truncateLabels": True,
+            "rotateAxisLabels": 90,
+            "title": matrix_file.name,
+            "paneId": "matrix-panel",
+            "file": matrix_id
+          }
+          logger.info("Matrix entries created successfully")
+      print(matrix_file_entry)
   except Exception as e:
     logger.error(f"Error creating matrix entry: {e}")
     raise e
@@ -257,7 +260,8 @@ def update_microreact_project(
   metadata: Optional[Path],
   date_column: Optional[str],
   remove_file_columns: bool,
-  tree_files: Optional[List[Path]]
+  tree_files: Optional[List[Path]],
+  matrix_files: Optional[List[Path]]
 ):
   logger.info(f"Updating existing Microreact project at {project_url}")
   url = f"https://microreact.org/api/projects/update?project={project_url}"
@@ -304,13 +308,20 @@ def update_microreact_project(
     logger.info("Updated project with new metadata")
   
   if tree_files:
-    tree_files_dict, tree_dict = add_trees(tree_files, id_column)
+    tree_files_dict, tree_dict = create_tree_entry(tree_files, id_column)
     updated_project["files"].update(tree_files_dict)
     if "trees" not in updated_project:
       updated_project["trees"] = tree_dict
     else:
       updated_project["trees"].update(tree_dict)
     logger.info("Updated project with new tree files")
+
+  if matrix_files is not None:
+    matrix_file_entries, matrix_entries = create_matrix_entry(matrix_files)
+    updated_project["files"].update(matrix_file_entries)
+    updated_project["matrices"].update(matrix_entries)
+  else:
+    logger.info("No matrix file provided; skipping matrix entry creation.")
 
   if date_column:
     updated_project["timelines"].update(timeline_dict)
@@ -326,7 +337,7 @@ def update_microreact_project(
 def create_microreact_project(
   metadata: Path,
   id_column: str,
-  matrix_file: Optional[Path],
+  matrix_files: Optional[List[Path]],
   date_column: Optional[str],
   tree_files: Optional[List[Path]],
   remove_file_columns: bool = True,
@@ -373,17 +384,16 @@ def create_microreact_project(
   }    
   json_scheme = add_entry(json_scheme, "tables", {table_id: table_entry})
   if tree_files:
-    tree_files_dict, tree_dict = add_trees(tree_files, id_column)
+    tree_files_dict, tree_dict = create_tree_entry(tree_files, id_column)
     json_scheme = add_entry(json_scheme, "files", tree_files_dict)
     json_scheme = add_entry(json_scheme, "trees", tree_dict)
   else:
     logger.info("No tree files provided; skipping tree entry creation.")
 
-  if matrix_file is not None:
-    logger.info(f"Matrix file provided: {matrix_file.name}")
-    matrix_file_entry, matrix_entry = create_matrix_entry(matrix_file)
-    json_scheme = add_entry(json_scheme, "files", matrix_file_entry)
-    json_scheme = add_entry(json_scheme, "matrices", matrix_entry)
+  if matrix_files is not None:
+    matrix_file_entries, matrix_entries = create_matrix_entry(matrix_files)
+    json_scheme = add_entry(json_scheme, "files", matrix_file_entries)
+    json_scheme = add_entry(json_scheme, "matrices", matrix_entries)
   else:
     logger.info("No matrix file provided; skipping matrix entry creation.")
 
@@ -406,7 +416,7 @@ def main():
   argparser.add_argument("--project_name", type=str, help="Name of the Microreact project")
   argparser.add_argument("--project_url", type=str, help="URL of the Microreact project, used for updating existing projects")
   argparser.add_argument("--metadata_tsv", type=Path, help="Path to the metadata file")
-  argparser.add_argument("--matrix_file", type=Path, help="Path to the distance matrix file")
+  argparser.add_argument("--matrix_files", nargs="*", type=Path, help="Path to the distance matrix file")
   argparser.add_argument("--tree_files", nargs="*", type=Path, help="Paths to the tree files")
   argparser.add_argument("--selected_columns", nargs="*", type=str, help="Columns to include in the Microreact table")
   argparser.add_argument("--access_token", type=str, help="Access token for Microreact API")
@@ -425,12 +435,13 @@ def main():
         id_column=args.id_column,
         date_column=args.date_column,
         remove_file_columns=args.remove_file_columns,
-        tree_files=args.tree_files
+        tree_files=args.tree_files,
+        matrix_files=args.matrix_files
     )
   else:
     project_json = create_microreact_project(
       metadata=args.metadata_tsv,
-      matrix_file=args.matrix_file,
+      matrix_files=args.matrix_files,
       tree_files=args.tree_files,
       project_name=args.project_name,
       id_column=args.id_column,
