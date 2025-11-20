@@ -197,33 +197,44 @@ def create_matrix_entry(
       matrix_entry = {}
       matrix_file_entry = {}
       for matrix_file in matrix_files:
+        with open(matrix_file, "r") as f:
+          intitial_line = f.readline()
+          delim = "\t" if "\t" in intitial_line else ","
+        '''
+        Due to snp-dists in MycoSNP reporting a str of snp-dists 0.8.2 at position [0,0].
+        This causes an column in the resulting matrix of NaN named snp-dists 0.8.2 in Microreact.
+        Here we set this position to always be empty.
+        We don't search for snp-dists 0.8.2 directly as this can change.
+        '''
+        matrix_data = pd.read_csv(matrix_file, header=None, sep=delim)
+        matrix_data.iloc[0,0] = ""
+        csv = matrix_data.to_csv(index=False, header=False)
+
         logger.info(f"Matrix file provided: {matrix_file.name}")
-        with open(matrix_file, 'r', encoding='utf-8') as f:
-          matrix_content = f.read()
-          matrix_encoded, matrix_id = encode(matrix_content)
-          logger.info(f"Matrix file encoded with ID: {matrix_id}")
-          logger.info("Creating matrix file entry")
-          matrix_file_entry[matrix_id] = {
-              "blob": matrix_encoded,
-              "format": "text/csv",
-              "id": matrix_id,
-              "name": matrix_file.name,
-              "type": "matrix"
-          }
-          logger.info("Creating matrix entry")
-          matrix_entry[f"matrix_{matrix_id}"] = {
-            "controls": True,
-            "labelsFontSize": 12,
-            "axisLabelsFontSize": 12,
-            "showLabels": False,
-            "truncateLabels": True,
-            "rotateAxisLabels": 90,
-            "title": matrix_file.name,
-            "paneId": "matrix-panel",
-            "file": matrix_id
-          }
-          logger.info("Matrix entries created successfully")
-      print(matrix_file_entry)
+        matrix_encoded, matrix_id = encode(csv)
+        logger.info(f"Matrix file encoded with ID: {matrix_id}")
+        logger.info("Creating matrix file entry")
+        matrix_file_entry[matrix_id] = {
+            "blob": matrix_encoded,
+            "format": "text/csv",
+            "id": matrix_id,
+            "name": matrix_file.name,
+            "type": "matrix"
+        }
+        logger.info("Creating matrix entry")
+        matrix_entry[f"matrix_{matrix_id}"] = {
+          "controls": True,
+          "labelsFontSize": 12,
+          "axisLabelsFontSize": 12,
+          "showLabels": False,
+          "truncateLabels": True,
+          "rotateAxisLabels": 90,
+          "title": matrix_file.name,
+          "paneId": "matrix-panel",
+          "file": matrix_id
+        }
+        logger.info("Matrix entries created successfully")
+        print(matrix_file_entry)
   except Exception as e:
     logger.error(f"Error creating matrix entry: {e}")
     raise e
