@@ -432,13 +432,12 @@ def main():
   argparser.add_argument("--selected_columns", nargs="*", type=str, help="Columns to include in the Microreact table")
   argparser.add_argument("--access_token", type=str, help="Access token for Microreact API")
   argparser.add_argument("--restricted_access", action="store_true", help="Set project access to private")
-  argparser.add_argument("--update", action="store_true", help="Update an existing Microreact project, pair with --project_url")
   argparser.add_argument("--remove_file_columns", action="store_true", help="Remove columns associated with cloud URLs")
   argparser.add_argument("--id_column", type=str, help="Column to use as the unique ID field")
   argparser.add_argument("--date_column", type=str, help="Column name for date usage and validation")
   args = argparser.parse_args()
 
-  if args.update and args.project_url:
+  if args.project_url:
     microreact_response, project_json = update_microreact_project(
         project_url=args.project_url,
         access_token=args.access_token,
