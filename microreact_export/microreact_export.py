@@ -318,7 +318,7 @@ def update_microreact_project(
     updated_project["files"].update(metadata_entry)
     logger.info("Updated project with new metadata")
   
-  if tree_files:
+  if tree_files is not None:
     tree_files_dict, tree_dict = create_tree_entry(tree_files, id_column)
     updated_project["files"].update(tree_files_dict)
     if "trees" not in updated_project:
@@ -326,11 +326,17 @@ def update_microreact_project(
     else:
       updated_project["trees"].update(tree_dict)
     logger.info("Updated project with new tree files")
+  else:
+    logger.info("No tree file provided; skipping tree entry creation.")
 
   if matrix_files is not None:
     matrix_file_entries, matrix_entries = create_matrix_entry(matrix_files)
     updated_project["files"].update(matrix_file_entries)
-    updated_project["matrices"].update(matrix_entries)
+    if "matrices" not in updated_project:
+      updated_project["matrices"] = matrix_entries
+    else:
+      updated_project["matrices"].update(matrix_entries)
+    logger.info("Updated project with new matrix files")
   else:
     logger.info("No matrix file provided; skipping matrix entry creation.")
 
