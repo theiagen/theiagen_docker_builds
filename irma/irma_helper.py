@@ -2,7 +2,6 @@
 import sys
 import argparse
 import logging
-import re
 import os
 import glob
 import pandas as pd
@@ -12,8 +11,7 @@ from Bio.Seq import Seq
 from pathlib import Path
 from typing import Dict
 """
-A helper script to facilitate QC summary creation and config creation
-for IRMA task.
+A helper script to facilitate QC summary creation and FASTA concatenation.
 """
 
 def setup_logger(log_file: str, verbose: bool) -> logging.Logger:
@@ -44,6 +42,7 @@ def segment_selection(
   # declare associative arrays for segment numbers
   subtype = ""
   subtype_notes = ""
+
   if irma_type == "Type_A":
     logger.info(f"Type reported as: {irma_type}")
     flu_segments = { "1": "PB2", "2": "PB1", "3": "PA", "4": "HA", "5": "NP", "6": "NA", "7": "MP", "8": "NS"}
@@ -64,7 +63,8 @@ def segment_selection(
     flu_segments: Dict[str, str] = { "2": "PB1", "1": "PB2", "3": "PA", "4": "HA", "5": "NP", "6": "NA", "7": "MP", "8": "NS"}
     subtype_notes = "IRMA does not differentiate Victoria and Yamagata Flu B lineages. See abricate_flu_subtype output column"
     logger.info(f"IRMA does not differentiate Victoria and Yamagata Flu B lineages. See abricate_flu_subtype output column")
-    
+  
+  # Write subtype and subtype notes to file for WDL interpretation
   try:
     logger.debug("Writing IRMA_SUBTYPE to file.")
     with open("IRMA_SUBTYPE.txt", "w") as irma_subtype:
@@ -128,6 +128,8 @@ def create_mira_qc(segments: Dict[str, str],
                   samplename: str,
                   logger: logging.Logger 
 ):
+  
+  # Create header for QC table and declare dataframes for variant information
   qc_df = pd.DataFrame(columns=[
     'Sample', 'Total Reads', 'Pass QC', 'Reads Mapped', 'Reference',
     '% Reference Covered', 'Median Coverage', 'Mean Coverage',
@@ -141,6 +143,7 @@ def create_mira_qc(segments: Dict[str, str],
   deletion_files = pd.DataFrame()
   insertion_files = pd.DataFrame()
 
+  # Read in READ_COUNTS.tsv and pull read metrics
   try:
     read_counts = pd.read_csv(f"{samplename}/tables/READ_COUNTS.tsv", sep='\t', index_col=0)
     logger.debug(f"READ_COUNTS.tsv file found for {samplename}.")
@@ -152,6 +155,7 @@ def create_mira_qc(segments: Dict[str, str],
 
   for segment in segments:
 
+    # Obtain mapped reads per segment
     if not read_counts.empty:
       logger.debug("READ_COUNTS.tsv present, parsing mapped reads")
       reads_mapped = read_counts.loc[read_counts.index.str.contains(segments[segment]), 'Reads'].values[0]
@@ -166,17 +170,23 @@ def create_mira_qc(segments: Dict[str, str],
     except:
       logger.warning(f"WARNING: No reference file found for segment {segments[segment]} for {samplename}")
       segment_ref_len = "N/A"
+
     # Load coverage file for parsing
     try:
       coverages = pd.read_csv(glob.glob(f"{samplename}/tables/*_{segments[segment]}*-coverage.txt")[0], sep='\t')
       logger.debug(f"Coverage file found for {samplename}:{segments[segment]}")
+
+      # Check for segment length presense 
       if segment_ref_len != "N/A" and int(segment_ref_len) > 0:
         mapped_bases = 0
+        # Mapped bases
         for base in coverages['Consensus']:
           if base not in ['-','N', 'a', 't', 'c', 'g']:
             mapped_bases += 1
+        # Calculate percentage rounded to second decimal place
         if mapped_bases > 0:
           segment_pct_ref_cov = round((mapped_bases / int(segment_ref_len) * 100), 2)
+        # Obtain mean and median coverage from coverage file
         mean_cov = round(coverages['Coverage Depth'].mean(), 2)
         median_cov = round(coverages['Coverage Depth'].median(), 2)
         logger.info(f"Mean Coverage and Median Coverage calculated as {mean_cov} and {median_cov} respectively.")
@@ -188,20 +198,25 @@ def create_mira_qc(segments: Dict[str, str],
 
     # Load variant tables
     try: 
+      # Using var_types reference dictionary obtain variant frequency for each type per segment
+      # and append to concatenated variant files
       for type in var_types:
         variant_count = 0
         insertion_count = 0
         deletion_count = 0
         variant_df = pd.read_csv(glob.glob(f"{samplename}/tables/*_{segments[segment]}*-{type}.txt")[0], sep='\t')
         logger.debug("Variant file loaded as dataframe")
+        # Perform frequency count on variants file
         if type == "variants":
           logger.debug(f"Variant file of type {type} selected")
           variant_count = (variant_df['Consensus_Frequency'] > variant_threshold).sum()
           snv_files = pd.concat([snv_files, variant_df], ignore_index=True)
+        # Perform frequency count on insertion file
         elif type == "insertions":
           logger.debug(f"Variant file of type {type} selected")
           insertion_count = (variant_df['Frequency'] > variant_threshold).sum()
           insertion_files = pd.concat([insertion_files, variant_df], ignore_index=True)
+        # Perform frequency count on deletions file
         elif type == "deletions":
           logger.debug(f"Variant file of type {type} selected")
           deletion_count = (variant_df['Frequency'] > variant_threshold).sum()
@@ -223,9 +238,11 @@ def create_mira_qc(segments: Dict[str, str],
       'Count of Minor Insertions (AF >= 0.05)': str(insertion_count),
       'Count of Minor Deletions (AF >= 0.05)': str(deletion_count)
     }
+    # Concatenate row to the QC dataframe
     qc_df = pd.concat([qc_df, pd.DataFrame([row])], ignore_index=True)
     logger.debug(f"Row for segment {segments[segment]} added.")
 
+  # Write concatenated variant files
   try:
     snv_files.to_csv(f"{samplename}/tables/{samplename}_irma_all_variants.tsv", sep="\t", index=False)
     deletion_files.to_csv(f"{samplename}/tables/{samplename}_irma_all_deletions.tsv", sep="\t", index=False)
@@ -234,6 +251,7 @@ def create_mira_qc(segments: Dict[str, str],
   except Exception as e:
     logger.warning(e)
 
+  # Fill empty entries with N/A and write QC summary file
   qc_df.fillna("N/A", inplace=True)
   qc_df.to_csv(f"{samplename}/{samplename}_irma_qc_summary.tsv", sep="\t", index=False)
   logger.debug("QC summary written.")
