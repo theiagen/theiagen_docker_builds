@@ -106,9 +106,10 @@ def add_entry(project: dict, section: str, entry_data: dict) -> dict:
 def create_tree_entry(tree_files: List[Path], 
                       id_column: str, 
                       set_id: str
-) -> tuple[dict, dict]:
+) -> tuple[dict, dict, dict]:
   tree_files_dict = {}
   tree_dict = {}
+  tree_names = {}
   allowed_file_types = {".nwk", ".newick", ".tre", ".tree", ".treefile", ".nhx", ".nex", ".nexus"} 
   for tree_file in tree_files:
     logger.info(f"Processing tree file: {tree_file}")
@@ -122,24 +123,26 @@ def create_tree_entry(tree_files: List[Path],
           tree_content = tf.read()
           tree_encoded, tree_id = encode(tree_content)
           logger.info(f"Tree file encoded with ID: {tree_id}")
+          tree_name = f"{set_id}_{Path(tree_file).stem}"
           tree_files_dict[tree_id] = {
               "blob": tree_encoded,
               "format": "text/x-nh",
               "file": tree_id,
-              "name": tree_file.name,
+              "name": tree_name,
               "type": "tree"
           }
-          tree_dict[f"{set_id}_{Path(tree_file).stem}"] = {
+          tree_dict[tree_name] = {
               "type": "rc",
               "labelField": id_column,
-              "title": f"{set_id}_{Path(tree_file).stem}",
+              "title": tree_name,
               "showLabels": True,
               "showLeafLabels": True,
               "file": tree_id
           }
+          tree_names[tree_name] = tree_id
       except Exception as e:
         logger.error(f"Error processing tree file {tree_file.name}: {e}")
-  return tree_files_dict, tree_dict
+  return tree_files_dict, tree_dict, tree_names
 
 def create_metadata_entry(
   metadata_parsed: str, 
@@ -195,7 +198,7 @@ def create_map_entry() -> dict:
 def create_matrix_entry(
   matrix_files: List[Path],
   set_id: str
-) -> tuple[dict, dict]:
+) -> tuple[dict, dict, str]:
   try:
     if matrix_files is not None:
       matrix_entry = {}
@@ -218,22 +221,23 @@ def create_matrix_entry(
         matrix_encoded, matrix_id = encode(csv)
         logger.info(f"Matrix file encoded with ID: {matrix_id}")
         logger.info("Creating matrix file entry")
+        matrix_name = f"{set_id}_{Path(matrix_file).stem}"
         matrix_file_entry[matrix_id] = {
             "blob": matrix_encoded,
             "format": "text/csv",
             "id": matrix_id,
-            "name": f"{set_id}_{Path(matrix_file).stem}",
+            "name": matrix_name,
             "type": "matrix"
         }
         logger.info("Creating matrix entry")
-        matrix_entry[f"{set_id}_{Path(matrix_file).stem}"] = {
+        matrix_entry[matrix_name] = {
           "controls": True,
           "labelsFontSize": 12,
           "axisLabelsFontSize": 12,
           "showLabels": False,
           "truncateLabels": True,
           "rotateAxisLabels": 90,
-          "title": f"{set_id}_{Path(matrix_file).stem}",
+          "title": matrix_name,
           "paneId": "matrix-panel",
           "file": matrix_id
         }
@@ -242,7 +246,7 @@ def create_matrix_entry(
   except Exception as e:
     logger.error(f"Error creating matrix entry: {e}")
     raise e
-  return matrix_file_entry, matrix_entry
+  return matrix_file_entry, matrix_entry, matrix_name
 
 def submit_microreact_project(
   project_input: dict,
@@ -324,18 +328,17 @@ def update_microreact_project(
     logger.info("Updated project with new metadata")
   
   if tree_files is not None:
-    tree_files_dict, tree_dict = create_tree_entry(tree_files, id_column, set_id)
-    updated_project["files"].update(tree_files_dict)
-    if "trees" not in updated_project:
-      updated_project["trees"] = tree_dict
-    else:
-      updated_project["trees"].update(tree_dict)
-    logger.info("Updated project with new tree files")
-  else:
-    logger.info("No tree file provided; skipping tree entry creation.")
+    tree_files_dict, tree_dict, tree_names = create_tree_entry(tree_files, id_column, set_id)
+    for tree in tree_names:
+      tree_to_update_id = updated_project["trees"][tree]["file"]
+      logger.info(f"Tree ID {tree_to_update_id} associated with {tree} found")
+      updated_project["trees"][tree].update(tree_dict[tree])
+      logger.info(f"Tree Entry updated for {tree}")
+      updated_project["files"][tree_to_update_id].update(tree_files_dict[tree_names[tree]])
+      logger.info(f"Tree File Entry updated for {tree}")
 
   if matrix_files is not None:
-    matrix_file_entries, matrix_entries = create_matrix_entry(matrix_files, set_id)
+    matrix_file_entries, matrix_entries, matrix_names = create_matrix_entry(matrix_files, set_id)
     updated_project["files"].update(matrix_file_entries)
     if "matrices" not in updated_project:
       updated_project["matrices"] = matrix_entries
@@ -407,14 +410,14 @@ def create_microreact_project(
   }    
   json_scheme = add_entry(json_scheme, "tables", {table_id: table_entry})
   if tree_files:
-    tree_files_dict, tree_dict = create_tree_entry(tree_files, id_column, set_id)
+    tree_files_dict, tree_dict, tree_name = create_tree_entry(tree_files, id_column, set_id)
     json_scheme = add_entry(json_scheme, "files", tree_files_dict)
     json_scheme = add_entry(json_scheme, "trees", tree_dict)
   else:
     logger.info("No tree files provided; skipping tree entry creation.")
 
   if matrix_files is not None:
-    matrix_file_entries, matrix_entries = create_matrix_entry(matrix_files, set_id)
+    matrix_file_entries, matrix_entries, matrix_name = create_matrix_entry(matrix_files, set_id)
     json_scheme = add_entry(json_scheme, "files", matrix_file_entries)
     json_scheme = add_entry(json_scheme, "matrices", matrix_entries)
   else:
