@@ -14,6 +14,11 @@ from typing import Dict
 A helper script to facilitate QC summary creation and FASTA concatenation.
 """
 
+FLU_SEGMENTS: Dict[str, Dict[str, str]] = {
+"A": {"1": "PB2", "2": "PB1", "3": "PA", "4": "HA", "5": "NP", "6": "NA", "7": "MP", "8": "NS"},
+"B": {"2": "PB1", "1": "PB2", "3": "PA", "4": "HA", "5": "NP", "6": "NA", "7": "MP", "8": "NS"},
+}
+
 def setup_logger(log_file: str, verbose: bool) -> logging.Logger:
   log_level = logging.DEBUG if verbose else logging.INFO
   
@@ -43,9 +48,9 @@ def segment_selection(
   full_type = ""
   subtype_notes = ""
 
-  if irma_type == "Type_A":
+  if irma_type == "A":
     logger.info(f"Type reported as: {irma_type}")
-    flu_segments = { "1": "PB2", "2": "PB1", "3": "PA", "4": "HA", "5": "NP", "6": "NA", "7": "MP", "8": "NS"}
+    flu_segments = FLU_SEGMENTS[irma_type]
     # Check for any subtypes within Type A segments, relying on structure of A_{segment}_{subtype}.fasta
     subtype_list = sorted(glob.glob(f"{samplename}/*_*_*.fasta"))
     logger.debug(f"List of files that contain subtype: {subtype_list}")
@@ -59,9 +64,9 @@ def segment_selection(
       full_type = "No subtype predicted by IRMA"
       logger.info(f"No subtype predicted by IRMA")
 
-  elif irma_type == "Type_B":
+  elif irma_type == "B":
     logger.info(f"Type reported as: {irma_type}")
-    flu_segments: Dict[str, str] = { "2": "PB1", "1": "PB2", "3": "PA", "4": "HA", "5": "NP", "6": "NA", "7": "MP", "8": "NS"}
+    flu_segments = FLU_SEGMENTS[irma_type]
     subtype_notes = "IRMA does not differentiate Victoria and Yamagata Flu B lineages. See abricate_flu_subtype output column"
     logger.info(f"IRMA does not differentiate Victoria and Yamagata Flu B lineages. See abricate_flu_subtype output column")
   
@@ -91,23 +96,23 @@ def consensus_creation(
 
   for segment in flu_segments:
     logger.debug(f"Parsing {flu_segments[segment]} in output files")
-    segment_file = glob.glob(f"{samplename}/amended_consensus/*_{segment}.fa")
-    if len(segment_file) > 0: 
-      record = list(SeqIO.parse(segment_file[0], "fasta"))[0]
+    segment_file = Path(f"{samplename}/amended_consensus/{samplename}_{segment}.fa")
+    if segment_file: 
+      record = list(SeqIO.parse(segment_file, "fasta"))[0]
       record.id = record.id.replace(segment, flu_segments[segment])
       record.description = ""
 
       concatenated_seq += str(record.seq)
       consensus_array.append(record)
 
-      SeqIO.write(record, segment_file[0], "fasta-2line")
-      os.rename(segment_file[0], f"{samplename}/amended_consensus/{samplename}_{flu_segments[segment]}.fasta")
+      SeqIO.write(record, segment_file, "fasta-2line")
+      os.rename(segment_file, f"{samplename}/amended_consensus/{samplename}_{flu_segments[segment]}.fasta")
       logger.debug(f"Amended consensus FASTA for {samplename}_{flu_segments[segment]} written and renamed")
 
       # Replace . for N and remove -
       record.seq = Seq(str(record.seq).replace('.', 'N').replace('-', ''))
       SeqIO.write(record, f"padded_assemblies/{samplename}_{flu_segments[segment]}.pad.fasta", "fasta-2line")
-      logger.debug(f"Padded fasta written for: {segment_file[0]}")
+      logger.debug(f"Padded fasta written for: {segment_file}")
       
       padded_consensus_array.append(record)
     else:
@@ -123,10 +128,11 @@ def consensus_creation(
 
 def create_mira_qc(segments: Dict[str, str], 
                   samplename: str,
+                  type: str,
                   subtype: str,
                   logger: logging.Logger 
 ):
-  
+
   # Create header for QC table and declare dataframes for variant information
   qc_df = pd.DataFrame(columns=[
     'Sample', 'Total Reads', 'Pass QC', 'Reads Mapped', 'Reference',
@@ -155,6 +161,8 @@ def create_mira_qc(segments: Dict[str, str],
     variant_count = 0
     insertion_count = 0
     deletion_count = 0
+    subtype_suffix = f"_{subtype}" if segments[segment] == "HA" or segments[segment] == "NA" else ""
+
     # Obtain mapped reads per segment
     if not read_counts.empty:
       logger.debug("READ_COUNTS.tsv present, parsing mapped reads")
@@ -163,8 +171,8 @@ def create_mira_qc(segments: Dict[str, str],
 
     # Load reference seq to obtain length of seq
     try:
-      logger.debug(glob.glob(f"{samplename}/intermediate/0-ITERATIVE-REFERENCES/R0-*_{segments[segment]}*.ref")[0])
-      ref_record = list(SeqIO.parse(glob.glob(f"{samplename}/intermediate/0-ITERATIVE-REFERENCES/R0-*_{segments[segment]}*.ref")[0], "fasta"))[0]
+      reference_path = Path(f"{samplename}/intermediate/0-ITERATIVE-REFERENCES/R0-{type}_{segments[segment]}{subtype_suffix}.ref")
+      ref_record = list(SeqIO.parse(reference_path, "fasta"))[0]
       segment_ref_len=str(len(ref_record))
       logger.debug(f"Segment reference found with length {segment_ref_len} for {samplename}:{segments[segment]}")
     except:
@@ -173,7 +181,8 @@ def create_mira_qc(segments: Dict[str, str],
 
     # Load coverage file for parsing
     try:
-      coverages = pd.read_csv(glob.glob(f"{samplename}/tables/*_{segments[segment]}*-coverage.txt")[0], sep='\t')
+      coverage_path = Path(f"{samplename}/tables/{type}_{segments[segment]}{subtype_suffix}-coverage.txt")
+      coverages = pd.read_csv(coverage_path, sep='\t')
       logger.debug(f"Coverage file found for {samplename}:{segments[segment]}")
 
       # Check for segment length presense 
@@ -200,35 +209,34 @@ def create_mira_qc(segments: Dict[str, str],
     try: 
       # Using var_types reference dictionary obtain variant frequency for each type per segment
       # and append to concatenated variant files
-      for type in var_types:
-        logger.debug(f"Checking type {type}")
-
+      for variant in var_types:
+        logger.debug(f"Checking type {variant}")
         try:
-          variant_file = glob.glob(f"{samplename}/tables/*_{segments[segment]}*-{type}.txt")[0]
+          variant_file = Path(f"{samplename}/tables/{type}_{segments[segment]}{subtype_suffix}-{variant}.txt")
         except:
-          logger.warning(f"No files found for type {type}")
+          logger.warning(f"No files found for type {variant}")
           continue
 
         logger.debug(f"Variant file selected: {variant_file}")
         variant_df = pd.read_csv(variant_file, sep='\t')
         logger.debug("Variant file loaded as dataframe")
         # Perform frequency count on variants file
-        if type == "variants":
-          logger.debug(f"Variant file of type {type} selected")
+        if variant == "variants":
+          logger.debug(f"Variant file of type '{variant}' selected")
           variant_count = (variant_df["Minority_Frequency"] > variant_threshold).sum()
-          logger.debug(f"Variant count for {type}: {variant_count}")
+          logger.debug(f"Variant count for {variant}: {variant_count}")
           snv_files = pd.concat([snv_files, variant_df], ignore_index=True)
         # Perform frequency count on insertion file
-        elif type == "insertions":
-          logger.debug(f"Variant file of type {type} selected")
+        elif variant == "insertions":
+          logger.debug(f"Variant file of type {variant} selected")
           insertion_count = (variant_df["Frequency"] > variant_threshold).sum()
-          logger.debug(f"Variant count for {type}: {insertion_count}")
+          logger.debug(f"Variant count for {variant}: {insertion_count}")
           insertion_files = pd.concat([insertion_files, variant_df], ignore_index=True)
         # Perform frequency count on deletions file
-        elif type == "deletions":
-          logger.debug(f"Variant file of type {type} selected")
+        elif variant == "deletions":
+          logger.debug(f"Variant file of type {variant} selected")
           deletion_count = (variant_df["Frequency"] > variant_threshold).sum()
-          logger.debug(f"Variant count for {type}: {deletion_count}")
+          logger.debug(f"Variant count for {variant}: {deletion_count}")
           deletion_files = pd.concat([deletion_files, variant_df], ignore_index=True)
     except Exception as e:
       logger.error(e)
@@ -239,7 +247,7 @@ def create_mira_qc(segments: Dict[str, str],
       'Total Reads': str(total_reads),
       'Pass QC': str(pass_qc_reads),
       'Reads Mapped': str(reads_mapped),
-      'Reference': segments[segment] + "_" + subtype,
+      'Reference': segments[segment] + subtype_suffix,
       '% Reference Covered': str(segment_pct_ref_cov),
       'Median Coverage': str(median_cov),
       'Mean Coverage': str(mean_cov),
@@ -283,7 +291,7 @@ def main():
 
   segments_dict, subtype = segment_selection(args.samplename, args.type, logger)
   consensus_creation(args.samplename, segments_dict, logger)
-  create_mira_qc(segments_dict, args.samplename, subtype, logger)
+  create_mira_qc(segments_dict, args.samplename, args.type, subtype, logger)
 
 if __name__ == "__main__":
   main()
