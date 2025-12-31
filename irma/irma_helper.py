@@ -74,8 +74,8 @@ def segment_selection(
     logger.info("Writing IRMA_SUBTYPE_NOTES to file.")
     with open("IRMA_SUBTYPE_NOTES.txt", "w") as subtype_notes_file:
       subtype_notes_file.writelines(subtype_notes)
-  except Exception as exc:
-    logger.error(f"Error: {exc}")
+  except Exception as e:
+    logger.error(f"Error writing IRMA_SUBTYPE.txt file: {e}")
 
   return flu_segments, subtype
 
@@ -115,15 +115,11 @@ def consensus_creation(
 
   try:
     SeqIO.write(consensus_array, f"{samplename}/amended_consensus/{samplename}.irma.consensus.fasta", "fasta-2line")
-    logger.debug("Consensus FASTA successfully written")
     SeqIO.write(padded_consensus_array, f"padded_assemblies/{samplename}.irma.consensus.pad.fasta", "fasta-2line")
-    logger.debug("Padded consensus FASTA successfully written")
     SeqIO.write(SeqRecord(Seq(concatenated_seq), f"{samplename}_irma_concatenated", description=""), f"{samplename}/amended_consensus/{samplename}.irma.consensus.concatenated.fasta", "fasta-2line")
-    logger.debug("Concatenated FASTA successfully written")
     SeqIO.write(SeqRecord(Seq(str(concatenated_seq).replace('.', 'N').replace('-', '')), f"{samplename}_irma_concatenated_padded", description=""), f"padded_assemblies/{samplename}.irma.consensus.concatenated.pad.fasta", "fasta-2line")
-    logger.debug("Padded concatenated FASTA successfully written")
   except Exception as e:
-    logger.error(f"Error: {e}")
+    logger.error(f"Error writing FASTA files: {e}")
 
 def create_mira_qc(segments: Dict[str, str], 
                   samplename: str,
