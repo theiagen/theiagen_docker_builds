@@ -40,7 +40,7 @@ def segment_selection(
   # flu segments from largest to smallest
   # Thank you Molly H. for this code block!
   # declare associative arrays for segment numbers
-  subtype = ""
+  full_type = ""
   subtype_notes = ""
 
   if irma_type == "Type_A":
@@ -52,10 +52,11 @@ def segment_selection(
 
     if subtype_list:
       for file in subtype_list:
-        subtype += Path(file).stem.split("_")[-1]
-      logger.info(f"Subtype reported as: {subtype}")
+        subtype = Path(file).stem.split("_")[-1]
+        full_type += subtype
+      logger.info(f"Subtype reported as: {full_type}")
     else:
-      subtype = "No subtype predicted by IRMA"
+      full_type = "No subtype predicted by IRMA"
       logger.info(f"No subtype predicted by IRMA")
 
   elif irma_type == "Type_B":
@@ -68,7 +69,7 @@ def segment_selection(
   try:
     logger.debug("Writing IRMA_SUBTYPE to file.")
     with open("IRMA_SUBTYPE.txt", "w") as irma_subtype:
-      irma_subtype.writelines(subtype)
+      irma_subtype.writelines(full_type)
 
     logger.info("Writing IRMA_SUBTYPE_NOTES to file.")
     with open("IRMA_SUBTYPE_NOTES.txt", "w") as subtype_notes_file:
@@ -76,7 +77,7 @@ def segment_selection(
   except Exception as exc:
     logger.error(f"Error: {exc}")
 
-  return flu_segments
+  return flu_segments, subtype
 
 def consensus_creation(
   samplename: str,
@@ -126,6 +127,7 @@ def consensus_creation(
 
 def create_mira_qc(segments: Dict[str, str], 
                   samplename: str,
+                  subtype: str,
                   logger: logging.Logger 
 ):
   
@@ -137,7 +139,7 @@ def create_mira_qc(segments: Dict[str, str],
     'Count of Minor Insertions (AF >= 0.05)',
     'Count of Minor Deletions (AF >= 0.05)'
   ])
-  var_types = ("variants", "insertions", "deletions")
+  var_types = ["variants", "insertions", "deletions"]
   variant_threshold = 0.05
   snv_files = pd.DataFrame()
   deletion_files = pd.DataFrame()
@@ -154,7 +156,9 @@ def create_mira_qc(segments: Dict[str, str],
     logger.warning("WARNING: READ_COUNTS.tsv file not found for {samplename}. Cannot extract read counts for QC summary.")
 
   for segment in segments:
-
+    variant_count = 0
+    insertion_count = 0
+    deletion_count = 0
     # Obtain mapped reads per segment
     if not read_counts.empty:
       logger.debug("READ_COUNTS.tsv present, parsing mapped reads")
@@ -201,25 +205,34 @@ def create_mira_qc(segments: Dict[str, str],
       # Using var_types reference dictionary obtain variant frequency for each type per segment
       # and append to concatenated variant files
       for type in var_types:
-        variant_count = 0
-        insertion_count = 0
-        deletion_count = 0
-        variant_df = pd.read_csv(glob.glob(f"{samplename}/tables/*_{segments[segment]}*-{type}.txt")[0], sep='\t')
+        logger.debug(f"Checking type {type}")
+
+        try:
+          variant_file = glob.glob(f"{samplename}/tables/*_{segments[segment]}*-{type}.txt")[0]
+        except:
+          logger.warning(f"No files found for type {type}")
+          continue
+
+        logger.debug(f"Variant file selected: {variant_file}")
+        variant_df = pd.read_csv(variant_file, sep='\t')
         logger.debug("Variant file loaded as dataframe")
         # Perform frequency count on variants file
         if type == "variants":
           logger.debug(f"Variant file of type {type} selected")
-          variant_count = (variant_df['Consensus_Frequency'] > variant_threshold).sum()
+          variant_count = (variant_df["Minority_Frequency"] > variant_threshold).sum()
+          logger.debug(f"Variant count for {type}: {variant_count}")
           snv_files = pd.concat([snv_files, variant_df], ignore_index=True)
         # Perform frequency count on insertion file
         elif type == "insertions":
           logger.debug(f"Variant file of type {type} selected")
-          insertion_count = (variant_df['Frequency'] > variant_threshold).sum()
+          insertion_count = (variant_df["Frequency"] > variant_threshold).sum()
+          logger.debug(f"Variant count for {type}: {insertion_count}")
           insertion_files = pd.concat([insertion_files, variant_df], ignore_index=True)
         # Perform frequency count on deletions file
         elif type == "deletions":
           logger.debug(f"Variant file of type {type} selected")
-          deletion_count = (variant_df['Frequency'] > variant_threshold).sum()
+          deletion_count = (variant_df["Frequency"] > variant_threshold).sum()
+          logger.debug(f"Variant count for {type}: {deletion_count}")
           deletion_files = pd.concat([deletion_files, variant_df], ignore_index=True)
     except Exception as e:
       logger.error(e)
@@ -230,7 +243,7 @@ def create_mira_qc(segments: Dict[str, str],
       'Total Reads': str(total_reads),
       'Pass QC': str(pass_qc_reads),
       'Reads Mapped': str(reads_mapped),
-      'Reference': segments[segment],
+      'Reference': segments[segment] + "_" + subtype,
       '% Reference Covered': str(segment_pct_ref_cov),
       'Median Coverage': str(median_cov),
       'Mean Coverage': str(mean_cov),
@@ -272,9 +285,9 @@ def main():
   
   logger = setup_logger(args.log, args.verbose)
 
-  segments_dict = segment_selection(args.samplename, args.type, logger)
+  segments_dict, subtype = segment_selection(args.samplename, args.type, logger)
   consensus_creation(args.samplename, segments_dict, logger)
-  create_mira_qc(segments_dict, args.samplename, logger)
+  create_mira_qc(segments_dict, args.samplename, subtype, logger)
 
 if __name__ == "__main__":
   main()
