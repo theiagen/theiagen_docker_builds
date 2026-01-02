@@ -275,11 +275,11 @@ def create_mira_qc(segments: Dict[str, str],
 
 def main():
   parser = argparse.ArgumentParser(
-      description="A helper script to increase readability and modularity of IRMA WDL task",
+      description="A helper script to parse IRMA output files and create various consensus FASTA files",
       formatter_class=argparse.ArgumentDefaultsHelpFormatter
   )
 
-  parser.add_argument("-t", "--type", type=str, required=True, help="IRMA Flu Type; Type_A or Type_B")
+  parser.add_argument("-t", "--type", type=str, required=True, help="IRMA Flu Type; A or B")
   parser.add_argument("-s", "--samplename", type=str, required=True, help="Samplename used to identify output directory and filenames")
   
   # Logging configurations
