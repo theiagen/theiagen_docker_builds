@@ -3,7 +3,6 @@ import sys
 import argparse
 import logging
 import os
-import glob
 import pandas as pd
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
@@ -14,6 +13,9 @@ from typing import Dict
 A helper script to facilitate QC summary creation and FASTA concatenation.
 """
 
+# flu segments from largest to smallest
+# Thank you Molly H. for this code block!
+# declare associative arrays for segment numbers
 FLU_SEGMENTS: Dict[str, Dict[str, str]] = {
 "A": {"1": "PB2", "2": "PB1", "3": "PA", "4": "HA", "5": "NP", "6": "NA", "7": "MP", "8": "NS"},
 "B": {"2": "PB1", "1": "PB2", "3": "PA", "4": "HA", "5": "NP", "6": "NA", "7": "MP", "8": "NS"},
@@ -37,36 +39,37 @@ def setup_logger(log_file: str, verbose: bool) -> logging.Logger:
   
   return logger
 
-def segment_selection(
+def subtype_selection(
   samplename: str,
   irma_type: str,
   logger: logging.Logger
 ):
-  # flu segments from largest to smallest
-  # Thank you Molly H. for this code block!
-  # declare associative arrays for segment numbers
-  full_type = ""
+  subtype_dict = {"HA" : "", "NA" : ""}
   subtype_notes = ""
+  subtype = ""
 
   if irma_type == "A":
     logger.info(f"Type reported as: {irma_type}")
     flu_segments = FLU_SEGMENTS[irma_type]
     # Check for any subtypes within Type A segments, relying on structure of A_{segment}_{subtype}.fasta
-    subtype_list = sorted(glob.glob(f"{samplename}/*_*_*.fasta"))
-    logger.debug(f"List of files that contain subtype: {subtype_list}")
-
-    if subtype_list:
-      for file in subtype_list:
-        subtype = Path(file).stem.split("_")[-1]
-        full_type += subtype
-      logger.info(f"Subtype reported as: {full_type}")
+    # Search is filtered to HA and NA segments only in the top layer of directory.
+    for file in os.scandir(samplename):
+      if file.is_file() and (file.name.startswith("A_HA_H") or file.name.startswith("A_NA_N")) and file.name.endswith(".fasta"):
+        logger.info(f"Aquiring subtype from {file}.")
+        subtype += os.path.splitext(file.name)[0].split("_")[-1]
+      else:
+        logger.info(f"File {file.name} does not match segment criteria or does not contain subtype information.")
+    if subtype:
+      # Split subtype into HA and NA components for use later in pathbuilding
+      subtype_dict["HA"], subtype_dict["NA"] = subtype[:2], subtype[2:]
+      logger.info(f"Subtype reported as {subtype_dict}")
     else:
-      full_type = "No subtype predicted by IRMA"
-      logger.info(f"No subtype predicted by IRMA")
-
+      logger.info(f"No subtype found within {samplename} for type {irma_type}.")
+      subtype_dict = {"HA": "No subtype", "NA": "No subtype"}
   elif irma_type == "B":
     logger.info(f"Type reported as: {irma_type}")
     flu_segments = FLU_SEGMENTS[irma_type]
+    subtype = "No subtype predicted by IRMA"
     subtype_notes = "IRMA does not differentiate Victoria and Yamagata Flu B lineages. See abricate_flu_subtype output column"
     logger.info(f"IRMA does not differentiate Victoria and Yamagata Flu B lineages. See abricate_flu_subtype output column")
   
@@ -74,15 +77,14 @@ def segment_selection(
   try:
     logger.debug("Writing IRMA_SUBTYPE to file.")
     with open("IRMA_SUBTYPE.txt", "w") as irma_subtype:
-      irma_subtype.writelines(full_type)
-
+      irma_subtype.writelines(subtype)
     logger.info("Writing IRMA_SUBTYPE_NOTES to file.")
     with open("IRMA_SUBTYPE_NOTES.txt", "w") as subtype_notes_file:
       subtype_notes_file.writelines(subtype_notes)
   except Exception as e:
     logger.error(f"Error writing IRMA_SUBTYPE.txt file: {e}")
 
-  return flu_segments, subtype
+  return flu_segments, subtype_dict
 
 def consensus_creation(
   samplename: str,
@@ -129,7 +131,7 @@ def consensus_creation(
 def create_mira_qc(segments: Dict[str, str], 
                   samplename: str,
                   type: str,
-                  subtype: str,
+                  subtype_dict: Dict[str, str],
                   logger: logging.Logger 
 ):
 
@@ -161,7 +163,11 @@ def create_mira_qc(segments: Dict[str, str],
     variant_count = 0
     insertion_count = 0
     deletion_count = 0
-    subtype_suffix = f"_{subtype}" if segments[segment] == "HA" or segments[segment] == "NA" else ""
+    logger.debug(f"Segment: {segments[segment]}")
+    logger.debug(f"Subtype for segment {segments[segment]}: {subtype_dict.get(segments[segment], 'Key not found')}")
+    # Assign subtype suffix for path building with subtype dictionary from subtype_selection
+    subtype_suffix = f"_{subtype_dict[segments[segment]]}" if segments[segment] in ["HA", "NA"] and subtype_dict[segments[segment]] else ""
+    logger.debug(f"Subtype suffix used for pathbuilding: {subtype_suffix}")
 
     # Obtain mapped reads per segment
     if not read_counts.empty:
@@ -289,7 +295,7 @@ def main():
   
   logger = setup_logger(args.log, args.verbose)
 
-  segments_dict, subtype = segment_selection(args.samplename, args.type, logger)
+  segments_dict, subtype = subtype_selection(args.samplename, args.type, logger)
   consensus_creation(args.samplename, segments_dict, logger)
   create_mira_qc(segments_dict, args.samplename, args.type, subtype, logger)
 
