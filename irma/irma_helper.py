@@ -40,9 +40,9 @@ def setup_logger(log_file: str, verbose: bool) -> logging.Logger:
   return logger
 
 def subtype_selection(
-  samplename: str,
-  irma_type: str,
-  logger: logging.Logger
+                      samplename: str,
+                      irma_type: str,
+                      logger: logging.Logger
 ):
   subtype_dict = {"HA" : "", "NA" : ""}
   subtype_notes = ""
@@ -78,18 +78,22 @@ def subtype_selection(
     logger.debug("Writing IRMA_SUBTYPE to file.")
     with open("IRMA_SUBTYPE.txt", "w") as irma_subtype:
       irma_subtype.writelines(subtype)
+  except IOError as e:
+    logger.error(f"Error writing IRMA_SUBTYPE.txt file: {e}")
+
+  try:
     logger.info("Writing IRMA_SUBTYPE_NOTES to file.")
     with open("IRMA_SUBTYPE_NOTES.txt", "w") as subtype_notes_file:
       subtype_notes_file.writelines(subtype_notes)
-  except Exception as e:
+  except IOError as e:
     logger.error(f"Error writing IRMA_SUBTYPE.txt file: {e}")
 
   return flu_segments, subtype_dict
 
 def consensus_creation(
-  samplename: str,
-  flu_segments: Dict[str, str],
-  logger: logging.Logger
+                        samplename: str,
+                        flu_segments: Dict[str, str],
+                        logger: logging.Logger
 ):
   
   consensus_array = []
@@ -107,15 +111,21 @@ def consensus_creation(
       concatenated_seq += str(record.seq)
       consensus_array.append(record)
 
-      SeqIO.write(record, segment_file, "fasta-2line")
-      os.rename(segment_file, f"{samplename}/amended_consensus/{samplename}_{flu_segments[segment]}.fasta")
-      logger.debug(f"Amended consensus FASTA for {samplename}_{flu_segments[segment]} written and renamed")
+      try:
+        SeqIO.write(record, segment_file, "fasta-2line")
+        os.rename(segment_file, f"{samplename}/amended_consensus/{samplename}_{flu_segments[segment]}.fasta")
+        logger.debug(f"Amended consensus FASTA for {samplename}_{flu_segments[segment]} written and renamed")
+      except IOError as e:
+        logger.error(f"Error writing segment fasta: {e}")
 
-      # Replace . for N and remove -
-      record.seq = Seq(str(record.seq).replace('.', 'N').replace('-', ''))
-      SeqIO.write(record, f"padded_assemblies/{samplename}_{flu_segments[segment]}.pad.fasta", "fasta-2line")
-      logger.debug(f"Padded fasta written for: {segment_file}")
-      
+      try:
+        # Replace . for N and remove -
+        record.seq = Seq(str(record.seq).replace('.', 'N').replace('-', ''))
+        SeqIO.write(record, f"padded_assemblies/{samplename}_{flu_segments[segment]}.pad.fasta", "fasta-2line")
+        logger.debug(f"Padded fasta written for: {segment_file}")
+      except IOError as e:
+        logger.error(f"Error writing padded segment fasta: {e}")
+
       padded_consensus_array.append(record)
     else:
       logger.warning(f"No file found for segment: {flu_segments[segment]}")
@@ -125,8 +135,132 @@ def consensus_creation(
     SeqIO.write(padded_consensus_array, f"padded_assemblies/{samplename}.irma.consensus.pad.fasta", "fasta-2line")
     SeqIO.write(SeqRecord(Seq(concatenated_seq), f"{samplename}_irma_concatenated", description=""), f"{samplename}/amended_consensus/{samplename}.irma.consensus.concatenated.fasta", "fasta-2line")
     SeqIO.write(SeqRecord(Seq(str(concatenated_seq).replace('.', 'N').replace('-', '')), f"{samplename}_irma_concatenated_padded", description=""), f"padded_assemblies/{samplename}.irma.consensus.concatenated.pad.fasta", "fasta-2line")
-  except Exception as e:
+  except IOError as e:
     logger.error(f"Error writing FASTA files: {e}")
+
+def read_counts(samplename: str, 
+                logger: logging.Logger, 
+                segment: str
+):
+  # Read in READ_COUNTS.tsv and pull read metrics
+  try:
+    read_counts = pd.read_csv(f"{samplename}/tables/READ_COUNTS.tsv", sep='\t', index_col=0)
+    logger.debug(f"READ_COUNTS.tsv file found for {samplename}.")
+
+    # Obtain mapped reads per segment
+    if not read_counts.empty:
+      logger.debug("READ_COUNTS.tsv present, parsing mapped reads")
+      reads_mapped = read_counts.loc[read_counts.index.str.contains(segment), 'Reads'].values[0]
+      logger.info(f"Mapped reads found to be: {reads_mapped}")
+
+    total_reads = read_counts.loc["1-initial", "Reads"]
+    pass_qc_reads = read_counts.loc["2-passQC", "Reads"]
+    logger.info(f"Total Reads found to be: {total_reads} \n Passing Reads found to be: {pass_qc_reads}")
+
+  except FileNotFoundError:
+    logger.warning("WARNING: READ_COUNTS.tsv file not found for {samplename}. Cannot extract read counts for QC summary.")
+  return total_reads, pass_qc_reads, reads_mapped
+
+def reference_length(samplename: str, 
+                     logger: logging.Logger, 
+                     segment: str, 
+                     reference_path: Path
+):
+  # Load reference seq to obtain length of seq
+  try:
+    ref_record = list(SeqIO.parse(reference_path, "fasta"))[0]
+    segment_ref_len=str(len(ref_record))
+    logger.debug(f"Segment reference found with length {segment_ref_len} for {samplename}:{segment}")
+  except FileNotFoundError:
+    logger.warning(f"WARNING: No reference file found for segment {segment} for {samplename}")
+    segment_ref_len = "N/A"
+  return segment_ref_len
+
+def coverage_parsing(samplename: str,
+                     logger: logging.Logger, 
+                     segment: str, 
+                     ref_length: int, 
+                     coverage_path: Path
+):
+  # Load coverage file for parsing
+  try:
+    coverages = pd.read_csv(coverage_path, sep='\t')
+    logger.debug(f"Coverage file found for {samplename}:{segment}")
+    mapped_bases = 0
+    # Mapped bases
+    for base in coverages['Consensus']:
+      if base not in ['-','N', 'a', 't', 'c', 'g']:
+        mapped_bases += 1
+    # Calculate percentage rounded to second decimal place
+    if mapped_bases > 0 and int(ref_length) > 0:
+      segment_pct_ref_cov = round((mapped_bases / int(ref_length) * 100), 2)
+    else:
+      segment_pct_ref_cov = None
+    # Obtain mean and median coverage from coverage file
+    mean_cov = round(coverages['Coverage Depth'].mean(), 2)
+    median_cov = round(coverages['Coverage Depth'].median(), 2)
+    logger.info(f"Mean Coverage and Median Coverage calculated as {mean_cov} and {median_cov} respectively.")
+  except FileNotFoundError as e:
+    logger.error(f"Error coverage file not found, setting mean_cov and median_cov to 'N/A': {e}")
+    mean_cov = "N/A"
+    median_cov = "N/A"
+    segment_pct_ref_cov = None
+  return mean_cov, median_cov, segment_pct_ref_cov
+
+def variant_parsing(logger: logging.Logger,
+                    variant_location: str
+):
+  var_types = ["variants", "insertions", "deletions"]
+  variant_threshold = 0.05
+
+  snv_files = pd.DataFrame()
+  deletion_files = pd.DataFrame()
+  insertion_files = pd.DataFrame()
+
+  # Set default variant counts
+  variant_count = 0
+  insertion_count = 0
+  deletion_count = 0
+
+  # Using var_types reference dictionary obtain variant frequency for each type per segment
+  # and append to concatenated variant files
+  for variant in var_types:
+    logger.debug(f"Checking type {variant}")
+    variant_file_path = f"{variant_location}-{variant}.txt"
+    variant_file = Path(variant_file_path)
+
+    try:
+      if variant_file.exists():
+        logger.info(f"Variant file found for {variant}")
+    except FileNotFoundError:
+      logger.error(f"Variant not found for variant: {variant}")
+      continue
+
+    logger.debug(f"Variant file selected: {variant_file}")
+    variant_df = pd.read_csv(variant_file, sep='\t')
+    logger.debug("Variant file loaded as dataframe")
+    try: 
+      # Perform frequency count on variants file
+      if variant == "variants":
+        logger.debug(f"Variant file of type '{variant}' selected")
+        variant_count = (variant_df["Minority_Frequency"] > variant_threshold).sum()
+        logger.debug(f"Variant count for {variant}: {variant_count}")
+        snv_files = variant_df
+      # Perform frequency count on insertion file
+      elif variant == "insertions":
+        logger.debug(f"Variant file of type {variant} selected")
+        insertion_count = (variant_df["Frequency"] > variant_threshold).sum()
+        logger.debug(f"Variant count for {variant}: {insertion_count}")
+        insertion_files = variant_df
+      # Perform frequency count on deletions file
+      elif variant == "deletions":
+        logger.debug(f"Variant file of type {variant} selected")
+        deletion_count = (variant_df["Frequency"] > variant_threshold).sum()
+        logger.debug(f"Variant count for {variant}: {deletion_count}")
+        deletion_files = variant_df
+    except IndexError as e:
+      logger.error(f"Error parsing variant file {variant}: {e}")
+  return deletion_count, insertion_count, variant_count, snv_files, insertion_files, deletion_files
 
 def create_mira_qc(segments: Dict[str, str], 
                   samplename: str,
@@ -143,110 +277,31 @@ def create_mira_qc(segments: Dict[str, str],
     'Count of Minor Insertions (AF >= 0.05)',
     'Count of Minor Deletions (AF >= 0.05)'
   ])
-  var_types = ["variants", "insertions", "deletions"]
-  variant_threshold = 0.05
-  snv_files = pd.DataFrame()
-  deletion_files = pd.DataFrame()
-  insertion_files = pd.DataFrame()
 
-  # Read in READ_COUNTS.tsv and pull read metrics
-  try:
-    read_counts = pd.read_csv(f"{samplename}/tables/READ_COUNTS.tsv", sep='\t', index_col=0)
-    logger.debug(f"READ_COUNTS.tsv file found for {samplename}.")
-    total_reads = read_counts.loc["1-initial", "Reads"]
-    pass_qc_reads = read_counts.loc["2-passQC", "Reads"]
-    logger.info(f"Total Reads found to be: {total_reads} \n Passing Reads found to be: {pass_qc_reads}")
-  except:
-    logger.warning("WARNING: READ_COUNTS.tsv file not found for {samplename}. Cannot extract read counts for QC summary.")
+  all_snv_files = pd.DataFrame()
+  all_deletion_files = pd.DataFrame()
+  all_insertion_files = pd.DataFrame()
 
   for segment in segments:
-    variant_count = 0
-    insertion_count = 0
-    deletion_count = 0
-    logger.debug(f"Segment: {segments[segment]}")
-    logger.debug(f"Subtype for segment {segments[segment]}: {subtype_dict.get(segments[segment], 'Key not found')}")
     # Assign subtype suffix for path building with subtype dictionary from subtype_selection
     subtype_suffix = f"_{subtype_dict[segments[segment]]}" if segments[segment] in ["HA", "NA"] and subtype_dict[segments[segment]] else ""
     logger.debug(f"Subtype suffix used for pathbuilding: {subtype_suffix}")
+    # Obtain read metrics from READ_COUNTS.tsv
+    total_reads, pass_qc_reads, reads_mapped = read_counts(samplename, logger, segment=segments[segment])
+    # Obtain the reference sequence length
+    reference_path = Path(f"{samplename}/intermediate/0-ITERATIVE-REFERENCES/R0-{type}_{segments[segment]}{subtype_suffix}.ref")
+    segment_ref_len = reference_length(samplename, logger, segments[segment], reference_path)
+    # Obtain coverage information 
+    coverage_path = Path(f"{samplename}/tables/{type}_{segments[segment]}{subtype_suffix}-coverage.txt")
+    mean_cov, median_cov, segment_pct_ref_cov = coverage_parsing(samplename, logger, segments[segment], segment_ref_len, coverage_path)
+    
+    deletion_count, insertion_count, variant_count, segment_snv_files, segment_insertion_files, segment_deletion_files  = variant_parsing(logger, f"{samplename}/tables/{type}_{segments[segment]}{subtype_suffix}")
 
-    # Obtain mapped reads per segment
-    if not read_counts.empty:
-      logger.debug("READ_COUNTS.tsv present, parsing mapped reads")
-      reads_mapped = read_counts.loc[read_counts.index.str.contains(segments[segment]), 'Reads'].values[0]
-      logger.info(f"Mapped reads found to be: {reads_mapped}")
+    # Concatenate segment variant files to overall 
+    all_snv_files = pd.concat([all_snv_files, segment_snv_files], ignore_index=True)
+    all_deletion_files = pd.concat([all_deletion_files, segment_deletion_files], ignore_index=True)
+    all_insertion_files = pd.concat([all_insertion_files, segment_insertion_files], ignore_index=True)
 
-    # Load reference seq to obtain length of seq
-    try:
-      reference_path = Path(f"{samplename}/intermediate/0-ITERATIVE-REFERENCES/R0-{type}_{segments[segment]}{subtype_suffix}.ref")
-      ref_record = list(SeqIO.parse(reference_path, "fasta"))[0]
-      segment_ref_len=str(len(ref_record))
-      logger.debug(f"Segment reference found with length {segment_ref_len} for {samplename}:{segments[segment]}")
-    except:
-      logger.warning(f"WARNING: No reference file found for segment {segments[segment]} for {samplename}")
-      segment_ref_len = "N/A"
-
-    # Load coverage file for parsing
-    try:
-      coverage_path = Path(f"{samplename}/tables/{type}_{segments[segment]}{subtype_suffix}-coverage.txt")
-      coverages = pd.read_csv(coverage_path, sep='\t')
-      logger.debug(f"Coverage file found for {samplename}:{segments[segment]}")
-
-      # Check for segment length presense 
-      if segment_ref_len != "N/A" and int(segment_ref_len) > 0:
-        mapped_bases = 0
-        # Mapped bases
-        for base in coverages['Consensus']:
-          if base not in ['-','N', 'a', 't', 'c', 'g']:
-            mapped_bases += 1
-        # Calculate percentage rounded to second decimal place
-        if mapped_bases > 0:
-          segment_pct_ref_cov = round((mapped_bases / int(segment_ref_len) * 100), 2)
-        # Obtain mean and median coverage from coverage file
-        mean_cov = round(coverages['Coverage Depth'].mean(), 2)
-        median_cov = round(coverages['Coverage Depth'].median(), 2)
-        logger.info(f"Mean Coverage and Median Coverage calculated as {mean_cov} and {median_cov} respectively.")
-    except Exception as e:
-      logger.warning(f"WARNING: segment_coverage_file is not set. Cannot calculate coverage statistics for segment {segments[segment]} for {samplename}.")
-      mean_cov = "N/A"
-      median_cov = "N/A"
-      segment_pct_ref_cov = None
-
-    # Load variant tables
-    try: 
-      # Using var_types reference dictionary obtain variant frequency for each type per segment
-      # and append to concatenated variant files
-      for variant in var_types:
-        logger.debug(f"Checking type {variant}")
-        try:
-          variant_file = Path(f"{samplename}/tables/{type}_{segments[segment]}{subtype_suffix}-{variant}.txt")
-        except:
-          logger.warning(f"No files found for type {variant}")
-          continue
-
-        logger.debug(f"Variant file selected: {variant_file}")
-        variant_df = pd.read_csv(variant_file, sep='\t')
-        logger.debug("Variant file loaded as dataframe")
-        # Perform frequency count on variants file
-        if variant == "variants":
-          logger.debug(f"Variant file of type '{variant}' selected")
-          variant_count = (variant_df["Minority_Frequency"] > variant_threshold).sum()
-          logger.debug(f"Variant count for {variant}: {variant_count}")
-          snv_files = pd.concat([snv_files, variant_df], ignore_index=True)
-        # Perform frequency count on insertion file
-        elif variant == "insertions":
-          logger.debug(f"Variant file of type {variant} selected")
-          insertion_count = (variant_df["Frequency"] > variant_threshold).sum()
-          logger.debug(f"Variant count for {variant}: {insertion_count}")
-          insertion_files = pd.concat([insertion_files, variant_df], ignore_index=True)
-        # Perform frequency count on deletions file
-        elif variant == "deletions":
-          logger.debug(f"Variant file of type {variant} selected")
-          deletion_count = (variant_df["Frequency"] > variant_threshold).sum()
-          logger.debug(f"Variant count for {variant}: {deletion_count}")
-          deletion_files = pd.concat([deletion_files, variant_df], ignore_index=True)
-    except Exception as e:
-      logger.error(e)
-          
     # Append the row to the DataFrame
     row = {
       'Sample': samplename,
@@ -267,12 +322,12 @@ def create_mira_qc(segments: Dict[str, str],
 
   # Write concatenated variant files
   try:
-    snv_files.to_csv(f"{samplename}/tables/{samplename}_irma_all_variants.tsv", sep="\t", index=False)
-    deletion_files.to_csv(f"{samplename}/tables/{samplename}_irma_all_deletions.tsv", sep="\t", index=False)
-    insertion_files.to_csv(f"{samplename}/tables/{samplename}_irma_all_insertions.tsv", sep="\t", index=False)
+    all_snv_files.to_csv(f"{samplename}/tables/{samplename}_irma_all_variants.tsv", sep="\t", index=False)
+    all_deletion_files.to_csv(f"{samplename}/tables/{samplename}_irma_all_deletions.tsv", sep="\t", index=False)
+    all_insertion_files.to_csv(f"{samplename}/tables/{samplename}_irma_all_insertions.tsv", sep="\t", index=False)
     logger.debug("Concatenated variant files written.")
-  except Exception as e:
-    logger.warning(e)
+  except IOError as e:
+    logger.error(f"Error writing variant files: {e}")
 
   # Fill empty entries with N/A and write QC summary file
   qc_df.fillna("N/A", inplace=True)
