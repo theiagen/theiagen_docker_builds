@@ -103,7 +103,7 @@ def consensus_creation(
   for segment in flu_segments:
     logger.debug(f"Parsing {flu_segments[segment]} in output files")
     segment_file = Path(f"{samplename}/amended_consensus/{samplename}_{segment}.fa")
-    if segment_file: 
+    if segment_file.exists(): 
       record = list(SeqIO.parse(segment_file, "fasta"))[0]
       record.id = record.id.replace(segment, flu_segments[segment])
       record.description = ""
@@ -129,6 +129,7 @@ def consensus_creation(
       padded_consensus_array.append(record)
     else:
       logger.warning(f"No file found for segment: {flu_segments[segment]}")
+      continue
 
   try:
     SeqIO.write(consensus_array, f"{samplename}/amended_consensus/{samplename}.irma.consensus.fasta", "fasta-2line")
@@ -195,13 +196,13 @@ def coverage_parsing(samplename: str,
     if mapped_bases > 0 and int(ref_length) > 0:
       segment_pct_ref_cov = round((mapped_bases / int(ref_length) * 100), 2)
     else:
-      segment_pct_ref_cov = None
+      segment_pct_ref_cov = 0
     # Obtain mean and median coverage from coverage file
     mean_cov = round(coverages['Coverage Depth'].mean(), 2)
     median_cov = round(coverages['Coverage Depth'].median(), 2)
     logger.info(f"Mean Coverage and Median Coverage calculated as {mean_cov} and {median_cov} respectively.")
   except FileNotFoundError as e:
-    logger.error(f"Error coverage file not found, setting mean_cov and median_cov to 'N/A': {e}")
+    logger.warning(f"Error coverage file not found for {samplename}:{segment}, setting mean_cov and median_cov to 'N/A'")
     mean_cov = "N/A"
     median_cov = "N/A"
     segment_pct_ref_cov = None
@@ -218,9 +219,9 @@ def variant_parsing(logger: logging.Logger,
   insertion_files = pd.DataFrame()
 
   # Set default variant counts
-  variant_count = 0
-  insertion_count = 0
-  deletion_count = 0
+  variant_count = ""
+  insertion_count = ""
+  deletion_count = ""
 
   # Using var_types reference dictionary obtain variant frequency for each type per segment
   # and append to concatenated variant files
@@ -229,37 +230,36 @@ def variant_parsing(logger: logging.Logger,
     variant_file_path = f"{variant_location}-{variant}.txt"
     variant_file = Path(variant_file_path)
 
+    logger.debug(f"Variant file selected: {variant_file}")
     try:
-      if variant_file.exists():
-        logger.info(f"Variant file found for {variant}")
+      variant_df = pd.read_csv(variant_file, sep='\t')
     except FileNotFoundError:
       logger.error(f"Variant not found for variant: {variant}")
       continue
-
-    logger.debug(f"Variant file selected: {variant_file}")
-    variant_df = pd.read_csv(variant_file, sep='\t')
     logger.debug("Variant file loaded as dataframe")
+
     try: 
       # Perform frequency count on variants file
       if variant == "variants":
         logger.debug(f"Variant file of type '{variant}' selected")
-        variant_count = (variant_df["Minority_Frequency"] > variant_threshold).sum()
+        variant_count = str((variant_df["Minority_Frequency"] > variant_threshold).sum())
         logger.debug(f"Variant count for {variant}: {variant_count}")
         snv_files = variant_df
       # Perform frequency count on insertion file
       elif variant == "insertions":
         logger.debug(f"Variant file of type {variant} selected")
-        insertion_count = (variant_df["Frequency"] > variant_threshold).sum()
+        insertion_count = str((variant_df["Frequency"] > variant_threshold).sum())
         logger.debug(f"Variant count for {variant}: {insertion_count}")
         insertion_files = variant_df
       # Perform frequency count on deletions file
       elif variant == "deletions":
         logger.debug(f"Variant file of type {variant} selected")
-        deletion_count = (variant_df["Frequency"] > variant_threshold).sum()
+        deletion_count = str((variant_df["Frequency"] > variant_threshold).sum())
         logger.debug(f"Variant count for {variant}: {deletion_count}")
         deletion_files = variant_df
     except IndexError as e:
       logger.error(f"Error parsing variant file {variant}: {e}")
+      
   return deletion_count, insertion_count, variant_count, snv_files, insertion_files, deletion_files
 
 def create_mira_qc(segments: Dict[str, str], 
@@ -309,12 +309,12 @@ def create_mira_qc(segments: Dict[str, str],
       'Pass QC': str(pass_qc_reads),
       'Reads Mapped': str(reads_mapped),
       'Reference': segments[segment] + subtype_suffix,
-      '% Reference Covered': str(segment_pct_ref_cov),
+      '% Reference Covered': segment_pct_ref_cov,
       'Median Coverage': str(median_cov),
       'Mean Coverage': str(mean_cov),
-      'Count of Minor SNVs (AF >= 0.05)': str(variant_count),    
-      'Count of Minor Insertions (AF >= 0.05)': str(insertion_count),
-      'Count of Minor Deletions (AF >= 0.05)': str(deletion_count)
+      'Count of Minor SNVs (AF >= 0.05)': variant_count,    
+      'Count of Minor Insertions (AF >= 0.05)': insertion_count,
+      'Count of Minor Deletions (AF >= 0.05)': deletion_count
     }
     # Concatenate row to the QC dataframe
     qc_df = pd.concat([qc_df, pd.DataFrame([row])], ignore_index=True)
@@ -330,7 +330,7 @@ def create_mira_qc(segments: Dict[str, str],
     logger.error(f"Error writing variant files: {e}")
 
   # Fill empty entries with N/A and write QC summary file
-  qc_df.fillna("N/A", inplace=True)
+  qc_df.replace(['', None], "N/A", inplace=True)
   qc_df.to_csv(f"{samplename}/{samplename}_irma_qc_summary.tsv", sep="\t", index=False)
   logger.debug("QC summary written.")
 
