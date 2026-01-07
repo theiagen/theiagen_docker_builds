@@ -51,21 +51,31 @@ def subtype_selection(
   if irma_type == "A":
     logger.info(f"Type reported as: {irma_type}")
     flu_segments = FLU_SEGMENTS[irma_type]
+
     # Check for any subtypes within Type A segments, relying on structure of A_{segment}_{subtype}.fasta
     # Search is filtered to HA and NA segments only in the top layer of directory.
     for file in os.scandir(samplename):
-      if file.is_file() and (file.name.startswith("A_HA_H") or file.name.startswith("A_NA_N")) and file.name.endswith(".fasta"):
-        logger.info(f"Aquiring subtype from {file}.")
-        subtype += os.path.splitext(file.name)[0].split("_")[-1]
+      if file.is_file():
+        # Splitting these two into different paths preserves the order of the subtype 'H*N*'
+        if file.name.startswith("A_HA_H") and file.name.endswith(".fasta"):
+          logger.info(f"Aquiring HA subtype from {file}.")
+          subtype_dict["HA"] = os.path.splitext(file.name)[0].split("_")[-1]
+        elif file.name.startswith("A_NA_N") and file.name.endswith(".fasta"):
+          logger.info(f"Aquiring NA subtype from {file}.")
+          subtype_dict["NA"] = os.path.splitext(file.name)[0].split("_")[-1]
       else:
         logger.info(f"File {file.name} does not match segment criteria or does not contain subtype information.")
-    if subtype:
-      # Split subtype into HA and NA components for use later in pathbuilding
-      subtype_dict["HA"], subtype_dict["NA"] = subtype[:2], subtype[2:]
+
+    # Build subtype in correct order
+    subtype = f"{subtype_dict['HA']}{subtype_dict['NA']}"
+    if subtype != "":
       logger.info(f"Subtype reported as {subtype_dict}")
     else:
       logger.info(f"No subtype found within {samplename} for type {irma_type}.")
       subtype_dict = {"HA": "No subtype", "NA": "No subtype"}
+      subtype = "No subtype predicted by IRMA"
+
+  # Populate subtype and subtype notes with set values for Type B
   elif irma_type == "B":
     logger.info(f"Type reported as: {irma_type}")
     flu_segments = FLU_SEGMENTS[irma_type]
@@ -100,10 +110,15 @@ def consensus_creation(
   padded_consensus_array = []
   concatenated_seq = ""
 
+  # Build consensus files using flu_segments as a guide
   for segment in flu_segments:
     logger.debug(f"Parsing {flu_segments[segment]} in output files")
     segment_file = Path(f"{samplename}/amended_consensus/{samplename}_{segment}.fa")
+
+    # Check if the segment file is present, it is possible for it not to be
     if segment_file.exists(): 
+
+      # Create a SeqIO record and rename FASTA
       record = list(SeqIO.parse(segment_file, "fasta"))[0]
       record.id = record.id.replace(segment, flu_segments[segment])
       record.description = ""
@@ -111,6 +126,7 @@ def consensus_creation(
       concatenated_seq += str(record.seq)
       consensus_array.append(record)
 
+      # Write FASTA
       try:
         SeqIO.write(record, segment_file, "fasta-2line")
         os.rename(segment_file, f"{samplename}/amended_consensus/{samplename}_{flu_segments[segment]}.fasta")
@@ -118,6 +134,7 @@ def consensus_creation(
       except IOError as e:
         logger.error(f"Error writing segment fasta: {e}")
 
+      # Write padded FASTA
       try:
         # Replace . for N and remove -
         record.seq = Seq(str(record.seq).replace('.', 'N').replace('-', ''))
@@ -130,7 +147,8 @@ def consensus_creation(
     else:
       logger.warning(f"No file found for segment: {flu_segments[segment]}")
       continue
-
+  
+  # Write array of consensus FASTAs
   try:
     SeqIO.write(consensus_array, f"{samplename}/amended_consensus/{samplename}.irma.consensus.fasta", "fasta-2line")
     SeqIO.write(padded_consensus_array, f"padded_assemblies/{samplename}.irma.consensus.pad.fasta", "fasta-2line")
@@ -295,9 +313,10 @@ def create_mira_qc(segments: Dict[str, str],
     coverage_path = Path(f"{samplename}/tables/{type}_{segments[segment]}{subtype_suffix}-coverage.txt")
     mean_cov, median_cov, segment_pct_ref_cov = coverage_parsing(samplename, logger, segments[segment], segment_ref_len, coverage_path)
     
+    # Obtain variant counts and create variant dataframes for concatenation
     deletion_count, insertion_count, variant_count, segment_snv_files, segment_insertion_files, segment_deletion_files  = variant_parsing(logger, f"{samplename}/tables/{type}_{segments[segment]}{subtype_suffix}")
 
-    # Concatenate segment variant files to overall 
+    # Concatenate segment variant files to overall variant files
     all_snv_files = pd.concat([all_snv_files, segment_snv_files], ignore_index=True)
     all_deletion_files = pd.concat([all_deletion_files, segment_deletion_files], ignore_index=True)
     all_insertion_files = pd.concat([all_insertion_files, segment_insertion_files], ignore_index=True)
