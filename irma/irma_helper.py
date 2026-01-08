@@ -111,15 +111,16 @@ def consensus_creation(
   concatenated_seq = ""
 
   # Build consensus files using flu_segments as a guide
-  for segment in flu_segments:
-    logger.debug(f"Parsing {flu_segments[segment]} in output files")
-    segment_file = Path(f"{samplename}/amended_consensus/{samplename}_{segment}.fa")
+  for segment_idx in flu_segments:
+    segment = flu_segments[segment_idx]
+    logger.debug(f"Parsing {segment} in output files")
+    segment_file = Path(f"{samplename}/amended_consensus/{samplename}_{segment_idx}.fa")
     # Check if the segment file is present, it is possible for it not to be
     if segment_file.exists(): 
       logger.debug(f"Segment file selected: {segment_file}")
       # Create a SeqIO record and rename FASTA
       record = list(SeqIO.parse(segment_file, "fasta"))[0]
-      record.id = record.id.replace(segment, flu_segments[segment])
+      record.id = record.id.replace(segment_idx, segment)
       record.description = ""
 
       concatenated_seq += str(record.seq)
@@ -128,8 +129,8 @@ def consensus_creation(
       # Write FASTA
       try:
         SeqIO.write(record, segment_file, "fasta-2line")
-        os.rename(segment_file, f"{samplename}/amended_consensus/{samplename}_{flu_segments[segment]}.fasta")
-        logger.debug(f"Amended consensus FASTA for {samplename}_{flu_segments[segment]} written and renamed")
+        os.rename(segment_file, f"{samplename}/amended_consensus/{samplename}_{segment}.fasta")
+        logger.debug(f"Amended consensus FASTA for {samplename}_{segment} written and renamed")
       except IOError as e:
         logger.error(f"Error writing segment fasta: {e}")
 
@@ -137,14 +138,14 @@ def consensus_creation(
       try:
         # Replace . for N and remove -
         record.seq = Seq(str(record.seq).replace('.', 'N').replace('-', ''))
-        SeqIO.write(record, f"padded_assemblies/{samplename}_{flu_segments[segment]}.pad.fasta", "fasta-2line")
+        SeqIO.write(record, f"padded_assemblies/{samplename}_{segment}.pad.fasta", "fasta-2line")
         logger.debug(f"Padded fasta written for: {segment_file}")
       except IOError as e:
         logger.error(f"Error writing padded segment fasta: {e}")
 
       padded_consensus_array.append(record)
     else:
-      logger.warning(f"No file found for segment: {flu_segments[segment]}")
+      logger.warning(f"No file found for segment: {segment}")
       continue
   
   # Write array of consensus FASTAs
@@ -299,21 +300,22 @@ def create_mira_qc(segments: Dict[str, str],
   all_deletion_files = pd.DataFrame()
   all_insertion_files = pd.DataFrame()
 
-  for segment in segments:
+  for segment_idx in segments:
+    segment = segments[segment_idx]
     # Assign subtype suffix for path building with subtype dictionary from subtype_selection
-    subtype_suffix = f"_{subtype_dict[segments[segment]]}" if segments[segment] in ["HA", "NA"] and subtype_dict[segments[segment]] else ""
+    subtype_suffix = f"_{subtype_dict[segment]}" if segment in ["HA", "NA"] and subtype_dict[segment] else ""
     logger.debug(f"Subtype suffix used for pathbuilding: {subtype_suffix}")
     # Obtain read metrics from READ_COUNTS.tsv
-    total_reads, pass_qc_reads, reads_mapped = read_counts(samplename, logger, segment=segments[segment])
+    total_reads, pass_qc_reads, reads_mapped = read_counts(samplename, logger, segment=segment)
     # Obtain the reference sequence length
-    reference_path = Path(f"{samplename}/intermediate/0-ITERATIVE-REFERENCES/R0-{type}_{segments[segment]}{subtype_suffix}.ref")
-    segment_ref_len = reference_length(samplename, logger, segments[segment], reference_path)
+    reference_path = Path(f"{samplename}/intermediate/0-ITERATIVE-REFERENCES/R0-{type}_{segment}{subtype_suffix}.ref")
+    segment_ref_len = reference_length(samplename, logger, segment, reference_path)
     # Obtain coverage information 
-    coverage_path = Path(f"{samplename}/tables/{type}_{segments[segment]}{subtype_suffix}-coverage.txt")
-    mean_cov, median_cov, segment_pct_ref_cov = coverage_parsing(samplename, logger, segments[segment], segment_ref_len, coverage_path)
+    coverage_path = Path(f"{samplename}/tables/{type}_{segment}{subtype_suffix}-coverage.txt")
+    mean_cov, median_cov, segment_pct_ref_cov = coverage_parsing(samplename, logger, segment, segment_ref_len, coverage_path)
     
     # Obtain variant counts and create variant dataframes for concatenation
-    deletion_count, insertion_count, variant_count, segment_snv_files, segment_insertion_files, segment_deletion_files  = variant_parsing(logger, f"{samplename}/tables/{type}_{segments[segment]}{subtype_suffix}")
+    deletion_count, insertion_count, variant_count, segment_snv_files, segment_insertion_files, segment_deletion_files  = variant_parsing(logger, f"{samplename}/tables/{type}_{segment}{subtype_suffix}")
 
     # Concatenate segment variant files to overall variant files
     all_snv_files = pd.concat([all_snv_files, segment_snv_files], ignore_index=True)
@@ -326,7 +328,7 @@ def create_mira_qc(segments: Dict[str, str],
       'Total Reads': str(total_reads),
       'Pass QC': str(pass_qc_reads),
       'Reads Mapped': str(reads_mapped),
-      'Reference': segments[segment] + subtype_suffix,
+      'Reference': segment + subtype_suffix,
       '% Reference Covered': segment_pct_ref_cov,
       'Median Coverage': str(median_cov),
       'Mean Coverage': str(mean_cov),
@@ -336,7 +338,7 @@ def create_mira_qc(segments: Dict[str, str],
     }
     # Concatenate row to the QC dataframe
     qc_df = pd.concat([qc_df, pd.DataFrame([row])], ignore_index=True)
-    logger.debug(f"Row for segment {segments[segment]} added.")
+    logger.debug(f"Row for segment {segment} added.")
 
   # Write concatenated variant files
   try:
