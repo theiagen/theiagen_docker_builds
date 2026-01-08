@@ -114,10 +114,9 @@ def consensus_creation(
   for segment in flu_segments:
     logger.debug(f"Parsing {flu_segments[segment]} in output files")
     segment_file = Path(f"{samplename}/amended_consensus/{samplename}_{segment}.fa")
-
     # Check if the segment file is present, it is possible for it not to be
     if segment_file.exists(): 
-
+      logger.debug(f"Segment file selected: {segment_file}")
       # Create a SeqIO record and rename FASTA
       record = list(SeqIO.parse(segment_file, "fasta"))[0]
       record.id = record.id.replace(segment, flu_segments[segment])
@@ -260,19 +259,19 @@ def variant_parsing(logger: logging.Logger,
       # Perform frequency count on variants file
       if variant == "variants":
         logger.debug(f"Variant file of type '{variant}' selected")
-        variant_count = str((variant_df["Minority_Frequency"] > variant_threshold).sum())
+        variant_count = str((variant_df["Minority_Frequency"] >= variant_threshold).sum())
         logger.debug(f"Variant count for {variant}: {variant_count}")
         snv_files = variant_df
       # Perform frequency count on insertion file
       elif variant == "insertions":
         logger.debug(f"Variant file of type {variant} selected")
-        insertion_count = str((variant_df["Frequency"] > variant_threshold).sum())
+        insertion_count = str((variant_df["Frequency"] >= variant_threshold).sum())
         logger.debug(f"Variant count for {variant}: {insertion_count}")
         insertion_files = variant_df
       # Perform frequency count on deletions file
       elif variant == "deletions":
         logger.debug(f"Variant file of type {variant} selected")
-        deletion_count = str((variant_df["Frequency"] > variant_threshold).sum())
+        deletion_count = str((variant_df["Frequency"] >= variant_threshold).sum())
         logger.debug(f"Variant count for {variant}: {deletion_count}")
         deletion_files = variant_df
     except IndexError as e:
