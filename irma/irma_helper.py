@@ -40,21 +40,25 @@ def setup_logger(log_file: str, verbose: bool) -> logging.Logger:
   return logger
 
 def subtype_selection(
+                      input_dir: Path,
                       samplename: str,
                       irma_type: str,
                       logger: logging.Logger
 ):
   subtype_dict = {"HA" : "", "NA" : ""}
   subtype_notes = ""
-  subtype = ""
+
+  # Defensively assign flu segments 
+  if irma_type not in FLU_SEGMENTS:
+    raise ValueError("IRMA Type not of type A or B")
+  flu_segments = FLU_SEGMENTS[irma_type]
 
   if irma_type == "A":
     logger.info(f"Type reported as: {irma_type}")
-    flu_segments = FLU_SEGMENTS[irma_type]
-
+    
     # Check for any subtypes within Type A segments, relying on structure of A_{segment}_{subtype}.fasta
     # Search is filtered to HA and NA segments only in the top layer of directory.
-    for file in os.scandir(samplename):
+    for file in os.scandir(input_dir):
       if file.is_file():
         # Splitting these two into different paths preserves the order of the subtype 'H*N*'
         if file.name.startswith("A_HA_H") and file.name.endswith(".fasta"):
@@ -78,7 +82,6 @@ def subtype_selection(
   # Populate subtype and subtype notes with set values for Type B
   elif irma_type == "B":
     logger.info(f"Type reported as: {irma_type}")
-    flu_segments = FLU_SEGMENTS[irma_type]
     subtype = "No subtype predicted by IRMA"
     subtype_notes = "IRMA does not differentiate Victoria and Yamagata Flu B lineages. See abricate_flu_subtype output column"
     logger.info(f"IRMA does not differentiate Victoria and Yamagata Flu B lineages. See abricate_flu_subtype output column")
@@ -96,11 +99,12 @@ def subtype_selection(
     with open("IRMA_SUBTYPE_NOTES.txt", "w") as subtype_notes_file:
       subtype_notes_file.writelines(subtype_notes)
   except IOError as e:
-    logger.error(f"Error writing IRMA_SUBTYPE.txt file: {e}")
+    logger.error(f"Error writing IRMA_SUBTYPE_NOTES.txt file: {e}")
 
   return flu_segments, subtype_dict
 
 def consensus_creation(
+                        input_dir: Path,
                         samplename: str,
                         flu_segments: Dict[str, str],
                         logger: logging.Logger
@@ -114,7 +118,7 @@ def consensus_creation(
   for segment_idx in flu_segments:
     segment = flu_segments[segment_idx]
     logger.debug(f"Parsing {segment} in output files")
-    segment_file = Path(f"{samplename}/amended_consensus/{samplename}_{segment_idx}.fa")
+    segment_file = input_dir / f"amended_consensus/{samplename}_{segment_idx}.fa"
     # Check if the segment file is present, it is possible for it not to be
     if segment_file.exists(): 
       logger.debug(f"Segment file selected: {segment_file}")
@@ -129,7 +133,7 @@ def consensus_creation(
       # Write FASTA
       try:
         SeqIO.write(record, segment_file, "fasta-2line")
-        os.rename(segment_file, f"{samplename}/amended_consensus/{samplename}_{segment}.fasta")
+        segment_file.rename(input_dir / f"amended_consensus/{samplename}_{segment_idx}.fa")
         logger.debug(f"Amended consensus FASTA for {samplename}_{segment} written and renamed")
       except IOError as e:
         logger.error(f"Error writing segment fasta: {e}")
@@ -150,20 +154,22 @@ def consensus_creation(
   
   # Write array of consensus FASTAs
   try:
-    SeqIO.write(consensus_array, f"{samplename}/amended_consensus/{samplename}.irma.consensus.fasta", "fasta-2line")
+    SeqIO.write(consensus_array, input_dir / f"amended_consensus/{samplename}.irma.consensus.fasta", "fasta-2line")
     SeqIO.write(padded_consensus_array, f"padded_assemblies/{samplename}.irma.consensus.pad.fasta", "fasta-2line")
-    SeqIO.write(SeqRecord(Seq(concatenated_seq), f"{samplename}_irma_concatenated", description=""), f"{samplename}/amended_consensus/{samplename}.irma.consensus.concatenated.fasta", "fasta-2line")
+    SeqIO.write(SeqRecord(Seq(concatenated_seq), f"{samplename}_irma_concatenated", description=""), input_dir / f"amended_consensus/{samplename}.irma.consensus.concatenated.fasta", "fasta-2line")
     SeqIO.write(SeqRecord(Seq(str(concatenated_seq).replace('.', 'N').replace('-', '')), f"{samplename}_irma_concatenated_padded", description=""), f"padded_assemblies/{samplename}.irma.consensus.concatenated.pad.fasta", "fasta-2line")
   except IOError as e:
     logger.error(f"Error writing FASTA files: {e}")
 
-def read_counts(samplename: str, 
+def read_counts(
+                input_dir: Path,
+                samplename: str, 
                 logger: logging.Logger, 
                 segment: str
 ):
   # Read in READ_COUNTS.tsv and pull read metrics
   try:
-    read_counts = pd.read_csv(f"{samplename}/tables/READ_COUNTS.tsv", sep='\t', index_col=0)
+    read_counts = pd.read_csv( input_dir / f"tables/READ_COUNTS.tsv", sep='\t', index_col=0)
     logger.debug(f"READ_COUNTS.tsv file found for {samplename}.")
 
     # Obtain mapped reads per segment
@@ -177,13 +183,14 @@ def read_counts(samplename: str,
     logger.info(f"Total Reads found to be: {total_reads} \n Passing Reads found to be: {pass_qc_reads}")
 
   except FileNotFoundError:
-    logger.warning("WARNING: READ_COUNTS.tsv file not found for {samplename}. Cannot extract read counts for QC summary.")
+    logger.warning(f"WARNING: READ_COUNTS.tsv file not found for {samplename}. Cannot extract read counts for QC summary.")
   return total_reads, pass_qc_reads, reads_mapped
 
-def reference_length(samplename: str, 
-                     logger: logging.Logger, 
-                     segment: str, 
-                     reference_path: Path
+def reference_length(
+                    samplename: str, 
+                    logger: logging.Logger, 
+                    segment: str, 
+                    reference_path: Path
 ):
   # Load reference seq to obtain length of seq
   try:
@@ -227,7 +234,7 @@ def coverage_parsing(samplename: str,
   return mean_cov, median_cov, segment_pct_ref_cov
 
 def variant_parsing(logger: logging.Logger,
-                    variant_location: str
+                    variant_location: Path
 ):
   var_types = ["variants", "insertions", "deletions"]
   variant_threshold = 0.05
@@ -245,12 +252,12 @@ def variant_parsing(logger: logging.Logger,
   # and append to concatenated variant files
   for variant in var_types:
     logger.debug(f"Checking type {variant}")
-    variant_file_path = f"{variant_location}-{variant}.txt"
-    variant_file = Path(variant_file_path)
+    logger.debug(f"Variant location: {variant_location}")
+    variant_file_path = Path(f"{variant_location}-{variant}.txt")
 
-    logger.debug(f"Variant file selected: {variant_file}")
+    logger.debug(f"Variant file selected: {variant_file_path}")
     try:
-      variant_df = pd.read_csv(variant_file, sep='\t')
+      variant_df = pd.read_csv(variant_file_path, sep='\t')
     except FileNotFoundError:
       logger.error(f"Variant not found for variant: {variant}")
       continue
@@ -280,9 +287,11 @@ def variant_parsing(logger: logging.Logger,
       
   return deletion_count, insertion_count, variant_count, snv_files, insertion_files, deletion_files
 
-def create_mira_qc(segments: Dict[str, str], 
+def create_mira_qc(
+                  input_dir: Path,
+                  segments: Dict[str, str], 
                   samplename: str,
-                  type: str,
+                  irma_type: str,
                   subtype_dict: Dict[str, str],
                   logger: logging.Logger 
 ):
@@ -306,16 +315,18 @@ def create_mira_qc(segments: Dict[str, str],
     subtype_suffix = f"_{subtype_dict[segment]}" if segment in ["HA", "NA"] and subtype_dict[segment] else ""
     logger.debug(f"Subtype suffix used for pathbuilding: {subtype_suffix}")
     # Obtain read metrics from READ_COUNTS.tsv
-    total_reads, pass_qc_reads, reads_mapped = read_counts(samplename, logger, segment=segment)
+    total_reads, pass_qc_reads, reads_mapped = read_counts(input_dir, samplename, logger, segment=segment)
     # Obtain the reference sequence length
-    reference_path = Path(f"{samplename}/intermediate/0-ITERATIVE-REFERENCES/R0-{type}_{segment}{subtype_suffix}.ref")
+    reference_path = input_dir / f"intermediate/0-ITERATIVE-REFERENCES/R0-{irma_type}_{segment}{subtype_suffix}.ref"
     segment_ref_len = reference_length(samplename, logger, segment, reference_path)
     # Obtain coverage information 
-    coverage_path = Path(f"{samplename}/tables/{type}_{segment}{subtype_suffix}-coverage.txt")
+    coverage_path = input_dir / f"tables/{irma_type}_{segment}{subtype_suffix}-coverage.txt"
     mean_cov, median_cov, segment_pct_ref_cov = coverage_parsing(samplename, logger, segment, segment_ref_len, coverage_path)
     
     # Obtain variant counts and create variant dataframes for concatenation
-    deletion_count, insertion_count, variant_count, segment_snv_files, segment_insertion_files, segment_deletion_files  = variant_parsing(logger, f"{samplename}/tables/{type}_{segment}{subtype_suffix}")
+    variant_path = input_dir / f"tables/{irma_type}_{segment}{subtype_suffix}"
+    logger.info(f"Variant path: {variant_path}")
+    deletion_count, insertion_count, variant_count, segment_snv_files, segment_insertion_files, segment_deletion_files  = variant_parsing(logger, variant_path)
 
     # Concatenate segment variant files to overall variant files
     all_snv_files = pd.concat([all_snv_files, segment_snv_files], ignore_index=True)
@@ -360,9 +371,10 @@ def main():
       formatter_class=argparse.ArgumentDefaultsHelpFormatter
   )
 
-  parser.add_argument("-t", "--type", type=str, required=True, help="IRMA Flu Type; A or B")
-  parser.add_argument("-s", "--samplename", type=str, required=True, help="Samplename used to identify output directory and filenames")
-  
+  parser.add_argument("-d", "--input_dir", type=Path, required=True, help="Output directory of IRMA used as input for helper script")
+  parser.add_argument("-t", "--irma_type", type=str, required=True, help="IRMA Flu Type; A or B")
+  parser.add_argument("-s", "--samplename", type=str, required=True, help="Samplename used to build filepaths")
+
   # Logging configurations
   parser.add_argument("--log", default="irma_helper.log", help="Log file")
   parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
@@ -370,9 +382,16 @@ def main():
   
   logger = setup_logger(args.log, args.verbose)
 
-  segments_dict, subtype = subtype_selection(args.samplename, args.type, logger)
-  consensus_creation(args.samplename, segments_dict, logger)
-  create_mira_qc(segments_dict, args.samplename, args.type, subtype, logger)
+  logger.info(f"Input Directory: {args.input_dir}")
+  logger.info(f"Input IRMA Type: {args.irma_type}")
+  logger.info(f"Samplename: {args.samplename}")
+
+  logger.info("Running subtype selection")
+  segments_dict, subtype = subtype_selection(args.input_dir, args.samplename, args.irma_type, logger)
+  logger.info("Running consensus creation")
+  consensus_creation(args.input_dir, args.samplename, segments_dict, logger)
+  logger.info("Creating MIRA QC output")
+  create_mira_qc(args.input_dir, segments_dict, args.samplename, args.irma_type, subtype, logger)
 
 if __name__ == "__main__":
   main()

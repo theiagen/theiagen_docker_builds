@@ -11,18 +11,21 @@ The Docker image associated with this script utilizes the Staphb IRMA image as b
 ### Running the Script
 A bare bones testing set has been included under `test_data/flu_test`. The script is designed to be run within `test_data`. For this particular set of data a test can be run as follows. This usage mimics how the script it utilized within the IRMA WDL task. 
 ```
-../irma_helper.py -t A -s flu_test -v
+../irma_helper.py -d flu_test -t A -s flu_test -v
 ```
 ```bash
-usage: irma_helper.py [-h] -t TYPE -s SAMPLENAME [--log LOG] [-v]
+usage: irma_helper.py [-h] -d INPUT_DIR -t IRMA_TYPE -s SAMPLENAME [--log LOG] [-v]
 
 A helper script to parse IRMA output files and create various consensus FASTA files
 
 options:
   -h, --help            show this help message and exit
-  -t TYPE, --type TYPE  IRMA Flu Type; A or B (default: None)
+  -d INPUT_DIR, --input_dir INPUT_DIR
+                        Output directory of IRMA used as input for helper script (default: None)
+  -t IRMA_TYPE, --irma_type IRMA_TYPE
+                        IRMA Flu Type; A or B (default: None)
   -s SAMPLENAME, --samplename SAMPLENAME
-                        Samplename used to identify output directory and filenames (default: None)
+                        Samplename used to build filepaths (default: None)
   --log LOG             Log file (default: irma_helper.log)
   -v, --verbose         Verbose output (default: False)
 ```
