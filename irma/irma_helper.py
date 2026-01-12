@@ -133,7 +133,7 @@ def consensus_creation(
       # Write FASTA
       try:
         SeqIO.write(record, segment_file, "fasta-2line")
-        segment_file.rename(input_dir / f"amended_consensus/{samplename}_{segment_idx}.fa")
+        segment_file.rename(input_dir / f"amended_consensus/{samplename}_{segment}.fa")
         logger.debug(f"Amended consensus FASTA for {samplename}_{segment} written and renamed")
       except IOError as e:
         logger.error(f"Error writing segment fasta: {e}")
