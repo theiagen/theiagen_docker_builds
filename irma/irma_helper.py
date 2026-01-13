@@ -39,6 +39,23 @@ def setup_logger(log_file: str, verbose: bool) -> logging.Logger:
   
   return logger
 
+def input_directory_validation(input_dir: Path, logger: logging.Logger):
+  necessary_sub_dirs = ["amended_consensus", "intermediate", "tables"]
+
+  logger.info("Validating presence of input directory and necessary subdirectories.")
+
+  if not input_dir.exists():
+    logger.error(f"Input directory {input_dir.name} does not exist.")
+    raise FileNotFoundError
+  
+  for sub_dir in necessary_sub_dirs:
+    if not Path(input_dir / sub_dir).exists():
+      logger.error(f"Necessary subdirectory '{sub_dir}' does not exist.")
+      raise FileNotFoundError
+    logger.info(f"Subdirectory '{sub_dir}' exists within {input_dir.name}.")
+  
+  logger.info(f"Input directory {input_dir.name} successfully validated and contains all necessary subdirectories.")
+
 def subtype_selection(
                       input_dir: Path,
                       samplename: str,
@@ -353,16 +370,16 @@ def create_mira_qc(
 
   # Write concatenated variant files
   try:
-    all_snv_files.to_csv(f"{samplename}/tables/{samplename}_irma_all_variants.tsv", sep="\t", index=False)
-    all_deletion_files.to_csv(f"{samplename}/tables/{samplename}_irma_all_deletions.tsv", sep="\t", index=False)
-    all_insertion_files.to_csv(f"{samplename}/tables/{samplename}_irma_all_insertions.tsv", sep="\t", index=False)
+    all_snv_files.to_csv(input_dir / f"tables/{samplename}_irma_all_variants.tsv", sep="\t", index=False)
+    all_deletion_files.to_csv(input_dir / f"tables/{samplename}_irma_all_deletions.tsv", sep="\t", index=False)
+    all_insertion_files.to_csv(input_dir / f"tables/{samplename}_irma_all_insertions.tsv", sep="\t", index=False)
     logger.debug("Concatenated variant files written.")
   except IOError as e:
     logger.error(f"Error writing variant files: {e}")
 
   # Fill empty entries with N/A and write QC summary file
   qc_df.replace(['', None], "N/A", inplace=True)
-  qc_df.to_csv(f"{samplename}/{samplename}_irma_qc_summary.tsv", sep="\t", index=False)
+  qc_df.to_csv(input_dir / f"{samplename}_irma_qc_summary.tsv", sep="\t", index=False)
   logger.debug("QC summary written.")
 
 def main():
@@ -385,6 +402,9 @@ def main():
   logger.info(f"Input Directory: {args.input_dir}")
   logger.info(f"Input IRMA Type: {args.irma_type}")
   logger.info(f"Samplename: {args.samplename}")
+
+  # Validate the presence of necessary directories within the input directory returned by IRMA
+  input_directory_validation(args.input_dir, logger)
 
   logger.info("Running subtype selection")
   segments_dict, subtype = subtype_selection(args.input_dir, args.samplename, args.irma_type, logger)
