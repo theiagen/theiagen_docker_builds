@@ -9,9 +9,9 @@ The Docker image associated with this script utilizes the Staphb IRMA image as b
 - pandas
 
 ### Running the Script
-A bare bones testing set has been included under `test_data/flu_test`. The script is designed to be run within `test_data`. For this particular set of data a test can be run as follows. This usage mimics how the script it utilized within the IRMA WDL task. 
+A bare bones testing set has been included under `test_data/flu_test`. For this particular set of data a test can be run as follows. This usage mimics how the script it utilized within the IRMA WDL task. Info regarding missing variant and coverage tables is expected behavior for this dataset as only A_HA_H3 variant tables were included. The resulting QC table will have only the HA_H3 segment populated and the rest should be "N/A".
 ```
-../irma_helper.py -d flu_test -t A -s flu_test -v
+python irma_helper.py -d test_data/flu_test/ -t A -s flu_test -v
 ```
 ```bash
 usage: irma_helper.py [-h] -d INPUT_DIR -t IRMA_TYPE -s SAMPLENAME [--log LOG] [-v]

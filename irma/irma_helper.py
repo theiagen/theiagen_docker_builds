@@ -47,7 +47,7 @@ def input_directory_validation(input_dir: Path, logger: logging.Logger):
   if not input_dir.exists():
     logger.error(f"Input directory {input_dir.name} does not exist.")
     raise FileNotFoundError
-  
+
   for sub_dir in necessary_sub_dirs:
     if not Path(input_dir / sub_dir).exists():
       logger.error(f"Necessary subdirectory '{sub_dir}' does not exist.")
@@ -130,7 +130,12 @@ def consensus_creation(
   consensus_array = []
   padded_consensus_array = []
   concatenated_seq = ""
-
+  
+  # Create separate directory for padded_assemblies
+  padded_assemblies_path = input_dir.parent / "padded_assemblies"
+  padded_assemblies_path.mkdir()
+  logger.info("Padded assembly output directory created.")
+  
   # Build consensus files using flu_segments as a guide
   for segment_idx in flu_segments:
     segment = flu_segments[segment_idx]
@@ -159,22 +164,22 @@ def consensus_creation(
       try:
         # Replace . for N and remove -
         record.seq = Seq(str(record.seq).replace('.', 'N').replace('-', ''))
-        SeqIO.write(record, f"padded_assemblies/{samplename}_{segment}.pad.fasta", "fasta-2line")
+        SeqIO.write(record, padded_assemblies_path / f"{samplename}_{segment}.pad.fasta", "fasta-2line")
         logger.debug(f"Padded fasta written for: {segment_file}")
       except IOError as e:
         logger.error(f"Error writing padded segment fasta: {e}")
 
       padded_consensus_array.append(record)
     else:
-      logger.warning(f"No file found for segment: {segment}")
+      logger.info(f"No assembly file found for segment: {segment}. IRMA likely did not produce one for this segment.")
       continue
   
   # Write array of consensus FASTAs
   try:
     SeqIO.write(consensus_array, input_dir / f"amended_consensus/{samplename}.irma.consensus.fasta", "fasta-2line")
-    SeqIO.write(padded_consensus_array, f"padded_assemblies/{samplename}.irma.consensus.pad.fasta", "fasta-2line")
+    SeqIO.write(padded_consensus_array, padded_assemblies_path / f"{samplename}.irma.consensus.pad.fasta", "fasta-2line")
     SeqIO.write(SeqRecord(Seq(concatenated_seq), f"{samplename}_irma_concatenated", description=""), input_dir / f"amended_consensus/{samplename}.irma.consensus.concatenated.fasta", "fasta-2line")
-    SeqIO.write(SeqRecord(Seq(str(concatenated_seq).replace('.', 'N').replace('-', '')), f"{samplename}_irma_concatenated_padded", description=""), f"padded_assemblies/{samplename}.irma.consensus.concatenated.pad.fasta", "fasta-2line")
+    SeqIO.write(SeqRecord(Seq(str(concatenated_seq).replace('.', 'N').replace('-', '')), f"{samplename}_irma_concatenated_padded", description=""), padded_assemblies_path / f"{samplename}.irma.consensus.concatenated.pad.fasta", "fasta-2line")
   except IOError as e:
     logger.error(f"Error writing FASTA files: {e}")
 
@@ -193,14 +198,14 @@ def read_counts(
     if not read_counts.empty:
       logger.debug("READ_COUNTS.tsv present, parsing mapped reads")
       reads_mapped = read_counts.loc[read_counts.index.str.contains(segment), 'Reads'].values[0]
-      logger.info(f"Mapped reads found to be: {reads_mapped}")
+      logger.info(f"Mapped reads found to be {reads_mapped} for {segment}.")
 
     total_reads = read_counts.loc["1-initial", "Reads"]
     pass_qc_reads = read_counts.loc["2-passQC", "Reads"]
-    logger.info(f"Total Reads found to be: {total_reads} \n Passing Reads found to be: {pass_qc_reads}")
+    logger.info(f"Total Reads found to be{total_reads}; Passing Reads found to be {pass_qc_reads} for {segment}")
 
   except FileNotFoundError:
-    logger.warning(f"WARNING: READ_COUNTS.tsv file not found for {samplename}. Cannot extract read counts for QC summary.")
+    logger.warning(f"WARNING: READ_COUNTS.tsv file not found for {samplename}. Cannot extract read counts of segment {segment} for QC summary.")
   return total_reads, pass_qc_reads, reads_mapped
 
 def reference_length(
@@ -213,9 +218,9 @@ def reference_length(
   try:
     ref_record = list(SeqIO.parse(reference_path, "fasta"))[0]
     segment_ref_len=str(len(ref_record))
-    logger.debug(f"Segment reference found with length {segment_ref_len} for {samplename}:{segment}")
+    logger.debug(f"Segment reference found with length {segment_ref_len} for {samplename}:{segment}.")
   except FileNotFoundError:
-    logger.warning(f"WARNING: No reference file found for segment {segment} for {samplename}")
+    logger.info(f"No reference file found for segment {segment} of {samplename}. Setting segment_ref_len to 'N/A'.")
     segment_ref_len = "N/A"
   return segment_ref_len
 
@@ -244,7 +249,7 @@ def coverage_parsing(samplename: str,
     median_cov = round(coverages['Coverage Depth'].median(), 2)
     logger.info(f"Mean Coverage and Median Coverage calculated as {mean_cov} and {median_cov} respectively.")
   except FileNotFoundError as e:
-    logger.warning(f"Error coverage file not found for {samplename}:{segment}, setting mean_cov and median_cov to 'N/A'")
+    logger.info(f"Coverage file not found for {samplename}:{segment}, setting mean_cov and median_cov to 'N/A'")
     mean_cov = "N/A"
     median_cov = "N/A"
     segment_pct_ref_cov = None
@@ -276,7 +281,7 @@ def variant_parsing(logger: logging.Logger,
     try:
       variant_df = pd.read_csv(variant_file_path, sep='\t')
     except FileNotFoundError:
-      logger.error(f"Variant not found for variant: {variant}")
+      logger.info(f"Variant not found for variant: {variant}. Variant information for {variant_file_path.name} will be 'N/A'.")
       continue
     logger.debug("Variant file loaded as dataframe")
 
