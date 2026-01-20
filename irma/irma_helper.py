@@ -193,16 +193,20 @@ def read_counts(
   try:
     read_counts = pd.read_csv( input_dir / f"tables/READ_COUNTS.tsv", sep='\t', index_col=0)
     logger.debug(f"READ_COUNTS.tsv file found for {samplename}.")
-
+    
     # Obtain mapped reads per segment
-    if not read_counts.empty:
+    if not read_counts.empty and read_counts.index.str.contains(segment).any():
       logger.debug("READ_COUNTS.tsv present, parsing mapped reads")
       reads_mapped = read_counts.loc[read_counts.index.str.contains(segment), 'Reads'].values[0]
       logger.info(f"Mapped reads found to be {reads_mapped} for {segment}.")
-
-    total_reads = read_counts.loc["1-initial", "Reads"]
-    pass_qc_reads = read_counts.loc["2-passQC", "Reads"]
-    logger.info(f"Total Reads found to be{total_reads}; Passing Reads found to be {pass_qc_reads} for {segment}")
+      total_reads = read_counts.loc["1-initial", "Reads"]
+      pass_qc_reads = read_counts.loc["2-passQC", "Reads"]
+      logger.info(f"Total Reads found to be{total_reads}; Passing Reads found to be {pass_qc_reads} for {segment}")
+    else:
+      logger.info(f"Entry for {segment} is not present. Setting read counts to NA.")
+      total_reads = ""
+      pass_qc_reads = ""
+      reads_mapped = ""
 
   except FileNotFoundError:
     logger.warning(f"WARNING: READ_COUNTS.tsv file not found for {samplename}. Cannot extract read counts of segment {segment} for QC summary.")
@@ -333,6 +337,7 @@ def create_mira_qc(
 
   for segment_idx in segments:
     segment = segments[segment_idx]
+    logger.debug(f"Current segment: {segment}")
     # Assign subtype suffix for path building with subtype dictionary from subtype_selection
     subtype_suffix = f"_{subtype_dict[segment]}" if segment in ["HA", "NA"] and subtype_dict[segment] else ""
     logger.debug(f"Subtype suffix used for pathbuilding: {subtype_suffix}")
