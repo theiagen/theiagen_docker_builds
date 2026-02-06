@@ -146,8 +146,11 @@ def consensus_creation(
       logger.debug(f"Segment file selected: {segment_file}")
       # Create a SeqIO record and rename FASTA
       record = list(SeqIO.parse(segment_file, "fasta"))[0]
-      record.id = record.id.replace(segment_idx, segment)
+      logger.debug(f"Segment header prior to reformat: {record.id}")
+      record.id = "_".join(record.id.split("_")[:-1] + [segment])
       record.description = ""
+      logger.debug(f"Segment header after to reformat: {record.id}")
+
 
       concatenated_seq += str(record.seq)
       consensus_array.append(record)
