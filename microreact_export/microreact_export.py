@@ -1,6 +1,7 @@
 import argparse
 import pandas as pd
 import requests
+import sys
 import json
 import base64
 import uuid
@@ -8,10 +9,31 @@ from pathlib import Path
 from typing import Optional, List
 import logging
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+def setup_logger(log_file: str, verbose: bool) -> logging.Logger:
+  log_level = logging.DEBUG if verbose else logging.INFO
+  
+  logger = logging.getLogger(__name__)
+  logger.setLevel(log_level)
+  
+  file_handler = logging.FileHandler(log_file)
+  stream_handler = logging.StreamHandler(sys.stderr)
 
-def parse_metadata_tsv(tsv: Path, id_column: str, remove_file_columns: bool = True, selected_columns: Optional[List[str]] = None, date_column: Optional[str] = None):
+  formatter = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s")
+  file_handler.setFormatter(formatter)
+  stream_handler.setFormatter(formatter)
+  
+  logger.addHandler(file_handler)
+  logger.addHandler(stream_handler)
+  
+  return logger
+
+def parse_metadata_tsv(tsv: Path, 
+                      id_column: str, 
+                      logger: logging.Logger,
+                      remove_file_columns: bool = True, 
+                      selected_columns: Optional[List[str]] = None, 
+                      date_column: Optional[str] = None
+):
   try:
     if tsv is not None:
       dates_validated = False
@@ -66,13 +88,17 @@ def parse_metadata_tsv(tsv: Path, id_column: str, remove_file_columns: bool = Tr
 
   return csv_data, headers, id_column, dates_validated
 
-def encode(data: str) -> tuple[str, str]:
+def encode(data: str, logger: logging.Logger) -> tuple[str, str]:
   encoded_data = "data:application/octet-stream;base64," + base64.b64encode(data.encode('utf-8')).decode('utf-8')
   file_id = str(uuid.uuid4())
   logger.info(f"File encoded with ID: {file_id}")
   return encoded_data, file_id
 
-def add_entry(project: dict, section: str, entry_data: dict) -> dict:
+def add_entry(project: dict, 
+              section: str, 
+              entry_data: dict,
+              logger: logging.Logger
+) -> dict:
   if section not in project:
     project[section] = entry_data
     logger.info(f"Added new section '{section}' to project.")
@@ -83,7 +109,8 @@ def add_entry(project: dict, section: str, entry_data: dict) -> dict:
 
 def create_tree_entry(tree_files: List[Path], 
                       id_column: str, 
-                      set_id: str
+                      set_id: str,
+                      logger: logging.Logger
 ) -> tuple[dict, dict, dict]:
   tree_files_dict = {}
   tree_dict = {}
@@ -125,10 +152,11 @@ def create_tree_entry(tree_files: List[Path],
 def create_metadata_entry(
   metadata_parsed: str, 
   dates_validated: str,
+  logger: logging.Logger,
   date_column: Optional[str]
 ) -> tuple[dict, dict, str]:
   logger.info("Creating metadata entry")
-  metadata_encoded, entry_id = encode(metadata_parsed)
+  metadata_encoded, entry_id = encode(metadata_parsed, logger)
   metadata_entry = {}
   metadata_entry[entry_id] = {
       "blob": metadata_encoded,
@@ -154,7 +182,7 @@ def create_metadata_entry(
 
   return metadata_entry, timeline_dict, entry_id
 
-def create_map_entry() -> dict:
+def create_map_entry(logger: logging.Logger) -> dict:
   logger.info("Creating map entry")
   map_entry = {}
   map_entry_id = str(uuid.uuid4())
@@ -175,7 +203,8 @@ def create_map_entry() -> dict:
 
 def create_matrix_entry(
   matrix_files: List[Path],
-  set_id: str
+  set_id: str,
+  logger: logging.Logger
 ) -> tuple[dict, dict, str]:
   try:
     if matrix_files is not None:
@@ -196,7 +225,7 @@ def create_matrix_entry(
         csv = matrix_data.to_csv(index=False, header=False)
 
         logger.info(f"Matrix file provided: {matrix_file.name}")
-        matrix_encoded, matrix_id = encode(csv)
+        matrix_encoded, matrix_id = encode(csv, logger)
         logger.info(f"Matrix file encoded with ID: {matrix_id}")
         logger.info("Creating matrix file entry")
         matrix_name = f"{set_id}_{Path(matrix_file).stem}"
@@ -229,6 +258,7 @@ def create_matrix_entry(
 def submit_microreact_project(
   project_input: dict,
   access_token: str,
+  logger: logging.Logger,
   restricted_access: bool = True
 ) -> dict:
   if access_token:
@@ -240,7 +270,22 @@ def submit_microreact_project(
       "Content-Type": "application/json; charset=UTF-8",
       "Access-Token": access_token
     }
-    response = requests.post(url, headers=post_headers, json=project_input)
+    
+    try:
+      response = requests.post(url, headers=post_headers, json=project_input)
+      response.raise_for_status()
+    except requests.exceptions.HTTPError as http_err:
+      logger.error(f"HTTP error has occured {http_err}")
+      raise
+    except requests.exceptions.ConnectionError as con_error:
+      logger.error(f"Failed to connect to Microreact {con_error}")
+      raise
+    except requests.exceptions.Timeout as timeout_error:
+      logger.error(f"Request timmed out: {timeout_error}")
+      raise
+    except requests.exceptions.RequestException as request_error:
+      logger.error(f"Request error has occured: {request_error}")
+      raise
 
     # Assign the response JSON for post submission interpretation
     microreact_response = response.json()
@@ -262,7 +307,8 @@ def update_microreact_project(
   date_column: Optional[str],
   remove_file_columns: bool,
   tree_files: Optional[List[Path]],
-  matrix_files: Optional[List[Path]]
+  matrix_files: Optional[List[Path]],
+  logger: logging.Logger
 ):
   logger.info(f"Updating existing Microreact project at {project_url}")
   url = f"https://microreact.org/api/projects/update?project={project_url}"
@@ -270,16 +316,33 @@ def update_microreact_project(
   get_request_headers = {
     "Access-Token": access_token
   }
-  get_response = requests.get(get_url, headers=get_request_headers)
-  updated_project = get_response.json()
+
+  try:
+    get_response = requests.get(get_url, headers=get_request_headers)
+    get_response.raise_for_status()
+  except requests.exceptions.HTTPError as http_err:
+    logger.error(f"HTTP error has occured {http_err}")
+    raise
+  except requests.exceptions.ConnectionError as con_error:
+    logger.error(f"Failed to connect to Microreact {con_error}")
+    raise
+  except requests.exceptions.Timeout as timeout_error:
+    logger.error(f"Request timmed out: {timeout_error}")
+    raise
+  except requests.exceptions.RequestException as request_error:
+    logger.error(f"Request error has occured: {request_error}")
+    raise
+
   logger.info("Fetched current project data for update")
+  updated_project = get_response.json()
+
   if metadata:
-    metadata_parsed, headers, id_column, dates_validated = parse_metadata_tsv(metadata, id_column, remove_file_columns, None, date_column)
-    metadata_entry, timeline_dict, metadata_id = create_metadata_entry(metadata_parsed, dates_validated, date_column)
+    metadata_parsed, headers, id_column, dates_validated = parse_metadata_tsv(metadata, id_column, logger, remove_file_columns, None, date_column)
+    metadata_entry, timeline_dict, metadata_id = create_metadata_entry(metadata_parsed, dates_validated, logger, date_column)
 
     if any(field.lower() == "latitude" or field.lower() == "longitude" for field in headers):
       if updated_project.get("maps") is None:
-        map_entry = create_map_entry()
+        map_entry = create_map_entry(logger)
         updated_project["maps"] = {
           **updated_project.get("maps", {}),
           **map_entry
@@ -309,7 +372,7 @@ def update_microreact_project(
     logger.info("Updated project with new metadata")
   
   if tree_files is not None:
-    tree_files_dict, tree_dict, tree_names = create_tree_entry(tree_files, id_column, set_id)
+    tree_files_dict, tree_dict, tree_names = create_tree_entry(tree_files, id_column, set_id, logger)
     for tree in tree_names:
       tree_to_update_id = updated_project["trees"][tree]["file"]
       logger.info(f"Tree ID {tree_to_update_id} associated with {tree} found")
@@ -319,7 +382,7 @@ def update_microreact_project(
       logger.info(f"Tree File Entry updated for {tree}")
 
   if matrix_files is not None:
-    matrix_file_entries, matrix_entries, matrix_names = create_matrix_entry(matrix_files, set_id)
+    matrix_file_entries, matrix_entries, matrix_names = create_matrix_entry(matrix_files, set_id, logger)
     updated_project["files"].update(matrix_file_entries)
     if "matrices" not in updated_project:
       updated_project["matrices"] = matrix_entries
@@ -347,6 +410,7 @@ def create_microreact_project(
   matrix_files: Optional[List[Path]],
   date_column: Optional[str],
   tree_files: Optional[List[Path]],
+  logger: logging.Logger,
   remove_file_columns: bool = True,
   project_name: str = "New Microreact Project",
   selected_columns: Optional[List[str]] = None
@@ -377,10 +441,10 @@ def create_microreact_project(
   logger.info(f"Set project name to: {project_name}")
   if metadata is None:
     raise ValueError("Metadata file path must be provided for metadata entry creation.")
-  metadata_parsed, headers, id_column, dates_validated = parse_metadata_tsv(metadata, id_column, remove_file_columns, selected_columns, date_column)
-  metadata_entry, timeline_dict, metadata_id = create_metadata_entry(metadata_parsed, dates_validated, date_column)
-  json_scheme = add_entry(json_scheme, "files", metadata_entry)
-  json_scheme = add_entry(json_scheme, "timelines", timeline_dict)
+  metadata_parsed, headers, id_column, dates_validated = parse_metadata_tsv(metadata, id_column, logger, remove_file_columns, selected_columns, date_column)
+  metadata_entry, timeline_dict, metadata_id = create_metadata_entry(metadata_parsed, dates_validated, logger, date_column)
+  json_scheme = add_entry(json_scheme, "files", metadata_entry, logger)
+  json_scheme = add_entry(json_scheme, "timelines", timeline_dict, logger)
   
   # Create Metadata Dataset and Table Entries
   dataset_id = str(uuid.uuid4())
@@ -390,7 +454,7 @@ def create_microreact_project(
     "file": metadata_id,
     "idFieldName": id_column
   }
-  json_scheme = add_entry(json_scheme, "datasets", {dataset_id: dataset_entry})
+  json_scheme = add_entry(json_scheme, "datasets", {dataset_id: dataset_entry}, logger)
   if selected_columns is not None and headers is not None:
     columns = []
     for col in selected_columns:
@@ -410,25 +474,25 @@ def create_microreact_project(
     "file": metadata_id,
     "columns": columns
   }    
-  json_scheme = add_entry(json_scheme, "tables", {table_id: table_entry})
+  json_scheme = add_entry(json_scheme, "tables", {table_id: table_entry}, logger)
   if tree_files:
-    tree_files_dict, tree_dict, tree_name = create_tree_entry(tree_files, id_column, set_id)
-    json_scheme = add_entry(json_scheme, "files", tree_files_dict)
-    json_scheme = add_entry(json_scheme, "trees", tree_dict)
+    tree_files_dict, tree_dict, tree_name = create_tree_entry(tree_files, id_column, set_id, logger)
+    json_scheme = add_entry(json_scheme, "files", tree_files_dict, logger)
+    json_scheme = add_entry(json_scheme, "trees", tree_dict, logger)
   else:
     logger.info("No tree files provided; skipping tree entry creation.")
 
   if matrix_files is not None:
-    matrix_file_entries, matrix_entries, matrix_name = create_matrix_entry(matrix_files, set_id)
-    json_scheme = add_entry(json_scheme, "files", matrix_file_entries)
-    json_scheme = add_entry(json_scheme, "matrices", matrix_entries)
+    matrix_file_entries, matrix_entries, matrix_name = create_matrix_entry(matrix_files, set_id, logger)
+    json_scheme = add_entry(json_scheme, "files", matrix_file_entries, logger)
+    json_scheme = add_entry(json_scheme, "matrices", matrix_entries, logger)
   else:
     logger.info("No matrix file provided; skipping matrix entry creation.")
 
   if headers is not None:
     if any("latitude" in field.lower() or "longitude" in field.lower() for field in headers):
-      map_entry = create_map_entry()
-      json_scheme = add_entry(json_scheme, "maps", map_entry)
+      map_entry = create_map_entry(logger)
+      json_scheme = add_entry(json_scheme, "maps", map_entry, logger)
       logger.info("Map entry created based on presence of latitude and longitude in metadata.")
     else:
       logger.info("No latitude/longitude fields found; skipping map entry creation.")
@@ -453,7 +517,11 @@ def main():
   argparser.add_argument("--remove_file_columns", action="store_true", help="Remove columns associated with cloud URLs")
   argparser.add_argument("--id_column", type=str, help="Column to use as the unique ID field")
   argparser.add_argument("--date_column", type=str, help="Column name for date usage and validation")
+  argparser.add_argument("--log", default="microreact_export.log", help="Name of log file to be used")
+  argparser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
   args = argparser.parse_args()
+
+  logger = setup_logger(args.log, args.verbose)
 
   if args.project_url:
     microreact_response, project_json = update_microreact_project(
@@ -465,13 +533,15 @@ def main():
         date_column=args.date_column,
         remove_file_columns=args.remove_file_columns,
         tree_files=args.tree_files,
-        matrix_files=args.matrix_files
+        matrix_files=args.matrix_files,
+        logger=logger
     )
   else:
     project_json = create_microreact_project(
       metadata=args.metadata_tsv,
       matrix_files=args.matrix_files,
       tree_files=args.tree_files,
+      logger=logger,
       project_name=args.project_name,
       id_column=args.id_column,
       set_id=args.set_id,
@@ -483,6 +553,7 @@ def main():
       microreact_response = submit_microreact_project(
         project_input=json.loads(project_json),
         access_token=args.access_token,
+        logger = logger,
         restricted_access=args.restricted_access
       )
 
