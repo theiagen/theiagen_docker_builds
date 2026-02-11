@@ -34,7 +34,7 @@ RUN git clone --recurse-submodules -b ${METABULI_VER} https://github.com/steineg
 RUN cd /metabuli; \
   mkdir build && \
   cd build && \
-  cmake -DCMAKE_BUILD_TYPE=Release .. && \
+  cmake -DCMAKE_BUILD_TYPE=Release -DNATIVE_ARCH=0 -DHAVE_AVX2_1=1 .. && \
   make -j $(nproc)
 
 ENV PATH="/metabuli/build/src:$PATH" \
