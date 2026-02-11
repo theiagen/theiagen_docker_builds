@@ -43,20 +43,20 @@ def parse_metadata_tsv(tsv: Path, id_column: str, remove_file_columns: bool = Tr
         logger.info(f"Original metadata TSV has {len(df)} records and columns: {df.columns.tolist()}")
         if selected_columns:
           logger.info(f"Selected_columns: {selected_columns}")
-          data = df[selected_columns]
+          selected_data = df[selected_columns]
         else:
           logger.info("No selected columns provided; using all columns.")
-          data = df
-        logger.info(f"Parsed metadata TSV with {len(data)} records and columns: {data.columns.tolist()}")
-        logger.info(f"First few rows of data:\n{data.head()}")
+          selected_data = df
+        logger.info(f"Parsed metadata TSV with {len(selected_data)} records and columns: {selected_data.columns.tolist()}")
+        logger.info(f"First few rows of data:\n{selected_data.head()}")
         
         if date_column:
-          if date_column in df.columns:
+          if date_column in selected_data.columns:
             logger.info(f"Validating date column: {date_column}")
-            df[f"{date_column}_validated"] = pd.to_datetime(df[date_column], errors='coerce')
+            selected_data[f"{date_column}_validated"] = pd.to_datetime(selected_data[date_column], errors='coerce')
             logger.info(f"Date column '{date_column}' validated successfully.")
             dates_validated = True
-            if df[f"{date_column}_validated"].isnull().any():
+            if selected_data[f"{date_column}_validated"].isnull().any():
               logger.warning(f"Some entries in date column '{date_column}' could not be parsed and were set to NaT in {date_column}_validated.")
           else:
             logger.warning(f"Date column '{date_column}' not found in metadata; skipping date validation.")
@@ -65,15 +65,15 @@ def parse_metadata_tsv(tsv: Path, id_column: str, remove_file_columns: bool = Tr
 
         if remove_file_columns:
           logger.info("Removing columns that contain file URLs.")
-          for col in data.columns:
-            if data[col].astype(str).str.startswith(('http://', 'https://', 's3://', 'gs://', 'ftp://')).any():
+          for col in selected_data.columns:
+            if selected_data[col].astype(str).str.startswith(('http://', 'https://', 's3://', 'gs://', 'ftp://')).any():
               logger.info(f"Removing column '{col}' as it to contain file URLs.")
-              data = data.drop(columns=[col])
+              selected_data = selected_data.drop(columns=[col])
         else:
           logger.info("Not removing columns containing file URLs.")
 
-        csv_data = data.to_csv(index=False)
-        f.close()
+        csv_data = selected_data.to_csv(index=False)
+
   except Exception as e:
     logger.error(f"Error parsing metadata TSV: {e}")
     raise e
@@ -263,9 +263,12 @@ def submit_microreact_project(
       "Access-Token": access_token
     }
     response = requests.post(url, headers=post_headers, json=project_input)
+
+    # Assign the response JSON for post submission interpretation
+    microreact_response = response.json()
     logger.info(f"Microreact API response status: {response.status_code}")
+
     if response.status_code == 200:
-      microreact_response = response.json()
       logger.info(f"Microreact project created successfully with ID: {microreact_response.get('id')}")
     else:
       logger.error(f"Failed to create Microreact project: {response.text}")
