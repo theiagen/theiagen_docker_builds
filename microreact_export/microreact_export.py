@@ -11,28 +11,6 @@ import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
-json_scheme = {
-  "schema": "https://microreact.org/schema/v1.json",
-  "meta": {
-    "name": {}
-  },
-  "datasets": {},
-  "files": {},
-  "tables": {},
-  "trees": {},
-  "charts": {},
-  "filters": {},
-  "matrices": {},
-  "maps": {},
-  "networks": {},
-  "notes": {},
-  "panes": {},
-  "slicers": {},
-  "styles": {},
-  "timelines": {},
-  "views": {}
-}
-
 def parse_metadata_tsv(tsv: Path, id_column: str, remove_file_columns: bool = True, selected_columns: Optional[List[str]] = None, date_column: Optional[str] = None):
   try:
     if tsv is not None:
@@ -371,9 +349,30 @@ def create_microreact_project(
   tree_files: Optional[List[Path]],
   remove_file_columns: bool = True,
   project_name: str = "New Microreact Project",
-  selected_columns: Optional[List[str]] = None,
-  json_scheme: dict = json_scheme
+  selected_columns: Optional[List[str]] = None
 ):
+  json_scheme = {
+    "schema": "https://microreact.org/schema/v1.json",
+    "meta": {
+      "name": ""
+    },
+    "datasets": {},
+    "files": {},
+    "tables": {},
+    "trees": {},
+    "charts": {},
+    "filters": {},
+    "matrices": {},
+    "maps": {},
+    "networks": {},
+    "notes": {},
+    "panes": {},
+    "slicers": {},
+    "styles": {},
+    "timelines": {},
+    "views": {}
+  }
+
   json_scheme["meta"]["name"] = project_name
   logger.info(f"Set project name to: {project_name}")
   if metadata is None:
@@ -478,8 +477,7 @@ def main():
       set_id=args.set_id,
       date_column=args.date_column,
       remove_file_columns=args.remove_file_columns,
-      selected_columns=args.selected_columns,
-      json_scheme=json_scheme
+      selected_columns=args.selected_columns
     )
     if args.access_token:
       microreact_response = submit_microreact_project(
