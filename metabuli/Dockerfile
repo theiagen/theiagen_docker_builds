@@ -1,6 +1,7 @@
 FROM ubuntu:jammy as app
 
 ARG METABULI_VER="1.1.1"
+ARG SEQKIT_VER="2.11.0"
 
 LABEL base.image="ubuntu:jammy"
 LABEL dockerfile.version="1"
@@ -29,7 +30,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Download Metabuli
 RUN git clone --recurse-submodules -b ${METABULI_VER} https://github.com/steineggerlab/Metabuli.git /metabuli
 
-
 # Build Metabuli
 RUN cd /metabuli; \
   mkdir build && \
@@ -39,6 +39,12 @@ RUN cd /metabuli; \
 
 ENV PATH="/metabuli/build/src:$PATH" \
  LC_ALL=C
+
+# Download and install SeqKit
+RUN wget https://github.com/shenwei356/seqkit/releases/download/v${SEQKIT_VER}/seqkit_linux_amd64.tar.gz && \
+    tar -xvzf seqkit_linux_amd64.tar.gz && \
+    rm seqkit_linux_amd64.tar.gz && \
+    mv seqkit /usr/local/bin/seqkit
 
 CMD [ "metabuli -h" ]
 
