@@ -49,6 +49,8 @@ RUN wget https://github.com/jenniferlu717/Bracken/archive/refs/tags/v${BRACKENVE
 
 ENV PATH="/Bracken-${BRACKENVER}/:/Bracken-${BRACKENVER}/src/:$PATH"
 
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 # default command is to pull up help options
 CMD [ "kraken2", "--help" ]
 
