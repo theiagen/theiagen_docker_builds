@@ -3,6 +3,8 @@ FROM ubuntu:jammy AS app
 # for easy upgrade later. ARG variables only persist during build time.
 ARG K2VER="2.17.1"
 ARG BRACKENVER="3.1"
+ARG SEQKITVER="2.11.0"
+
 # This is supposed to be v2.1.4 but there was a typo on their repo as "v2.14"
 LABEL base.image="ubuntu:jammy"
 LABEL dockerfile.version="1"
@@ -46,6 +48,13 @@ RUN wget https://github.com/jenniferlu717/Bracken/archive/refs/tags/v${BRACKENVE
     rm -rf v${BRACKENVER}.tar.gz && \
     cd Bracken-${BRACKENVER} && \
     bash install_bracken.sh
+
+# Download and install SeqKit
+RUN wget https://github.com/shenwei356/seqkit/releases/download/v${SEQKITVER}/seqkit_linux_amd64.tar.gz && \
+    tar -xvzf seqkit_linux_amd64.tar.gz && \
+    rm seqkit_linux_amd64.tar.gz && \
+    mv seqkit /usr/local/bin/seqkit
+
 
 ENV PATH="/Bracken-${BRACKENVER}/:/Bracken-${BRACKENVER}/src/:$PATH"
 
