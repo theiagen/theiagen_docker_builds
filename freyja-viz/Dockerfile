@@ -6,4 +6,4 @@ COPY freyja_to_long.py /usr/local/bin/freyja_to_long.py
 COPY freyja_microreact.py /usr/local/bin/freyja_microreact.py
 RUN chmod +x /usr/local/bin/freyja_to_long.py /usr/local/bin/freyja_microreact.py
 
-ENTRYPOINT ["python", "/usr/local/bin/freyja_to_long.py"]
+CMD ["/bin/bash"]
