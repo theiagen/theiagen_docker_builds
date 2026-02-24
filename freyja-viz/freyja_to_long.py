@@ -5,9 +5,10 @@ import argparse
 import sys
 import pandas as pd
 
-METADATA_COLS = ["jurisdiction", "collection_date", "month", "day", "year"]
-GROUP_KEY_COLS = ["jurisdiction", "collection_date"]  # uniquely identifies a site+date
-OUTPUT_COLS = ["id"] + METADATA_COLS[:1] + ["variant", "percent", "origin_samples"] + METADATA_COLS[1:]
+REQUIRED_META_COLS = ["collection_site", "collection_date", "month", "day", "year"]
+OPTIONAL_META_COLS = ["latitude", "longitude"]
+METADATA_COLS = REQUIRED_META_COLS + OPTIONAL_META_COLS
+GROUP_KEY_COLS = ["collection_site", "collection_date"]  # uniquely identifies a site+date
 
 
 def normalize_percents(x):
@@ -57,7 +58,8 @@ def freyja_to_long(input_tsv, output_csv, sample_col):
     sample_counts = freyja_variance_long_format_df.groupby(GROUP_KEY_COLS)[sample_col].nunique().rename("n_samples")
 
     # sum per site+date+variant, divide by total samples in group; collect contributing samples
-    extra_meta = [c for c in METADATA_COLS if c not in GROUP_KEY_COLS]
+    present_meta = [c for c in METADATA_COLS if c in freyja_variance_long_format_df.columns]
+    extra_meta = [c for c in present_meta if c not in GROUP_KEY_COLS]
     freyja_variance_long_format_df = freyja_variance_long_format_df.groupby(GROUP_KEY_COLS + extra_meta + ["variant"], as_index=False).agg(
         percent=("percent", "sum"),
         origin_samples=(sample_col, lambda x: ",".join(sorted(x.unique()))),
@@ -68,8 +70,9 @@ def freyja_to_long(input_tsv, output_csv, sample_col):
     # fix rounding so each group sums to exactly 100
     freyja_variance_long_format_df["percent"] = freyja_variance_long_format_df.groupby(GROUP_KEY_COLS)["percent"].transform(normalize_percents)
 
+    output_cols = ["id"] + present_meta[:1] + ["variant", "percent", "origin_samples"] + present_meta[1:]
     freyja_variance_long_format_df.insert(0, "id", range(1, len(freyja_variance_long_format_df) + 1))
-    freyja_variance_long_format_df[OUTPUT_COLS].to_csv(output_csv, sep="\t", index=False)
+    freyja_variance_long_format_df[output_cols].to_csv(output_csv, sep="\t", index=False)
     print(f"Wrote {len(freyja_variance_long_format_df)} rows to {output_csv}")
 
 
