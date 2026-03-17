@@ -1,0 +1,24 @@
+FROM mambaorg/micromamba
+
+LABEL maintainer="Michal Babinski"
+LABEL maintainer.email="michal.babinski@theiagen.com"
+LABEL description="ARTIC Pipeline for nanopore viral genome sequencing"
+LABEL version="1.9.0"
+
+# Install ARTIC pipeline
+RUN micromamba install -y -c bioconda -c conda-forge \
+    artic \
+    git \
+    && micromamba clean --all --yes
+
+ENV PATH="/opt/conda/bin:$PATH" \
+    CONDA_PREFIX="/opt/conda"
+
+# Get models for newer flowcell chemistries
+RUN artic_get_models
+
+WORKDIR /data
+
+USER root
+
+RUN git clone --recursive https://github.com/artic-network/primer-schemes
