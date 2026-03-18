@@ -20,5 +20,3 @@ RUN artic_get_models
 WORKDIR /data
 
 USER root
-
-RUN git clone --recursive https://github.com/artic-network/primer-schemes
