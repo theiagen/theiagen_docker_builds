@@ -12,14 +12,19 @@ LABEL license="https://github.com/AMRverse/AMRrules/blob/main/LICENSE"
 LABEL maintainer="Michal Babinski"
 LABEL maintainer.email="michal.babinski@theiagen.com"
 
-RUN micromamba create -y -n amrrules_beta -c bioconda -c conda-forge \
-        python=3.12 pip git make && \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    make \
+    ca-certificates \
+    && apt-get autoclean && rm -rf /var/lib/apt/lists/*
+
+RUN micromamba create -y -n amrrules_beta -c bioconda -c conda-forge python=3.12 pip && \
     micromamba clean --all --yes
 
 ENV PATH="/opt/conda/envs/amrrules_beta/bin:${PATH}"
 ENV CONDA_DEFAULT_ENV=amrrules_beta
 
-WORKDIR /home/mambauser
+WORKDIR /opt
 RUN git clone https://github.com/AMRverse/AMRrules && \
     cd AMRrules && \
     git checkout ${AMRRULES_BRANCH} && \
