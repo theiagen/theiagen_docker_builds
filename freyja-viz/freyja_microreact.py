@@ -14,6 +14,7 @@ import requests
 class FreyjaColumns:
     id: str = "id"
     date: str = "collection_date"
+    week: str = "week"
     percent: str = "percent"
     variant: str = "variant"
     collection_site: str = "collection_site"
@@ -116,11 +117,14 @@ def encode(data: str) -> tuple[str, str]:
     return blob, new_id()
 
 
-def build_panes(has_map: bool) -> dict:
+def build_panes(has_map: bool, has_timeline: bool = True) -> dict:
     chart_tab = {"type": "tab", "id": "chart-1", "name": "Chart", "component": "Chart"}
-    timeline_tab = {"type": "tab", "id": "timeline-1", "name": "Timeline", "component": "Timeline"}
     table_tab = {"type": "tab", "id": "table-1", "name": "Metadata", "component": "Table"}
-    bottom_tabset = {"type": "tabset", "id": new_id(), "weight": 48, "selected": 1, "children": [timeline_tab, table_tab]}
+    if has_timeline:
+        timeline_tab = {"type": "tab", "id": "timeline-1", "name": "Timeline", "component": "Timeline"}
+        bottom_tabset = {"type": "tabset", "id": new_id(), "weight": 48, "selected": 1, "children": [timeline_tab, table_tab]}
+    else:
+        bottom_tabset = {"type": "tabset", "id": new_id(), "weight": 48, "selected": 0, "children": [table_tab]}
 
     if has_map:
         map_tab = {"type": "tab", "id": "map-1", "name": "Map", "component": "Map"}
@@ -160,9 +164,12 @@ def build_panes(has_map: bool) -> dict:
 def create_project(input_tsv: Path, project_name: str, cols: FreyjaColumns) -> dict:
     df = pd.read_csv(input_tsv, sep="\t")
     has_map = cols.latitude in df.columns and cols.longitude in df.columns
+    # week-mode output from freyja_to_long.py --group-by week has no collection_date / y/m/d
+    is_week_mode = cols.week in df.columns and cols.date not in df.columns
 
-    # normalize date to ISO format (YYYY-MM-DD) so Microreact parses it unambiguously
-    df[cols.date] = pd.to_datetime(df[cols.date]).dt.strftime("%Y-%m-%d")
+    if not is_week_mode:
+        # normalize date to ISO format (YYYY-MM-DD) so Microreact parses it unambiguously
+        df[cols.date] = pd.to_datetime(df[cols.date]).dt.strftime("%Y-%m-%d")
 
     # embed as CSV so commas inside values (e.g. origin_samples) are properly quoted
     # and the "text/csv" format declaration matches the actual delimiter
@@ -174,12 +181,9 @@ def create_project(input_tsv: Path, project_name: str, cols: FreyjaColumns) -> d
     dataset = MicroreactDataset(id=dataset_id, file=file_id, idFieldName=cols.id)
     chart = MicroreactChart(
         title="Variant Relative Abundance", paneId="chart-1",
-        xAxisField=cols.date, yAxisField=cols.percent,
+        xAxisField=cols.week if is_week_mode else cols.date,
+        yAxisField=cols.percent,
         seriesField=cols.variant, facetField=cols.collection_site,
-    )
-    timeline = MicroreactTimeline(
-        title="Timeline", paneId="timeline-1",
-        yearField=cols.year, monthField=cols.month, dayField=cols.day,
     )
     table = MicroreactTable(
         paneId="table-1",
@@ -187,13 +191,20 @@ def create_project(input_tsv: Path, project_name: str, cols: FreyjaColumns) -> d
         file=file_id,
     )
 
+    timelines = {}
+    if not is_week_mode:
+        timelines["timeline-1"] = asdict(MicroreactTimeline(
+            title="Timeline", paneId="timeline-1",
+            yearField=cols.year, monthField=cols.month, dayField=cols.day,
+        ))
+
     project = {
         "schema": "https://microreact.org/schema/v1.json",
         "meta": {"name": project_name},
         "files": {file_id: asdict(data_file)},
         "datasets": {dataset_id: asdict(dataset)},
         "charts": {"chart-1": asdict(chart)},
-        "timelines": {"timeline-1": asdict(timeline)},
+        "timelines": timelines,
         "tables": {"table-1": asdict(table)},
         "maps": {},
         "trees": {}, "matrices": {}, "networks": {}, "notes": {},
@@ -209,7 +220,7 @@ def create_project(input_tsv: Path, project_name: str, cols: FreyjaColumns) -> d
             "legendDirection": "row", "shapesField": None, "shapePalettes": [],
         },
         "views": [],
-        "panes": build_panes(has_map),
+        "panes": build_panes(has_map, has_timeline=not is_week_mode),
     }
 
     if has_map:
