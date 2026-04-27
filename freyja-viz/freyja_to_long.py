@@ -8,8 +8,8 @@ import pandas as pd
 REQUIRED_META_COLS = ["collection_site", "collection_date", "month", "day", "year"]
 OPTIONAL_META_COLS = ["latitude", "longitude"]
 METADATA_COLS = REQUIRED_META_COLS + OPTIONAL_META_COLS
-GROUP_KEY_COLS = ["collection_site", "collection_date"]  # uniquely identifies a site+date
-
+GROUP_DATE_KEY_COLS = ["collection_site", "collection_date"]  # uniquely identifies a site+date
+GROUP_WEEK_KEY_COLS = ["collection_site", "week"]  # uniquely identifies a site+week
 
 def normalize_percents(x):
     """Round percents in a group so they sum to exactly 100."""
@@ -47,11 +47,11 @@ def freyja_to_long(input_tsv, output_csv, sample_col, group_by="date"):
 
     if group_by == "week":
         freyja_variance_df["week"] = compute_epiweek(pd.to_datetime(freyja_variance_df["collection_date"]))
-        group_key_cols = ["collection_site", "week"]
+        group_key_cols = GROUP_WEEK_KEY_COLS
         meta_cols = group_key_cols + [c for c in OPTIONAL_META_COLS if c in existing_cols]
     else:
         freyja_variance_df = derive_date_parts(freyja_variance_df)
-        group_key_cols = GROUP_KEY_COLS
+        group_key_cols = GROUP_DATE_KEY_COLS
         meta_cols = [c for c in METADATA_COLS if c in freyja_variance_df.columns]
 
     # drop rows missing lineage/abundance data
