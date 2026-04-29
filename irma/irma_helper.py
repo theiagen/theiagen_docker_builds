@@ -207,9 +207,9 @@ def read_counts(
       logger.info(f"Total Reads found to be{total_reads}; Passing Reads found to be {pass_qc_reads} for {segment}")
     else:
       logger.info(f"Entry for {segment} is not present. Setting read counts to NA.")
-      total_reads = ""
-      pass_qc_reads = ""
-      reads_mapped = ""
+      total_reads = "N/A"
+      pass_qc_reads = "N/A"
+      reads_mapped = "N/A"
 
   except FileNotFoundError:
     logger.warning(f"WARNING: READ_COUNTS.tsv file not found for {samplename}. Cannot extract read counts of segment {segment} for QC summary.")
