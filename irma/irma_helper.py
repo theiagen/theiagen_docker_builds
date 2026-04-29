@@ -273,9 +273,9 @@ def variant_parsing(logger: logging.Logger,
   insertion_files = pd.DataFrame()
 
   # Set default variant counts
-  variant_count = ""
-  insertion_count = ""
-  deletion_count = ""
+  variant_count = "N/A"
+  insertion_count = "N/A"
+  deletion_count = "N/A"
 
   # Using var_types reference dictionary obtain variant frequency for each type per segment
   # and append to concatenated variant files
@@ -391,7 +391,7 @@ def create_mira_qc(
     logger.error(f"Error writing variant files: {e}")
 
   # Fill empty entries with N/A and write QC summary file
-  qc_df.replace(['', None], "N/A", inplace=True)
+  qc_df.fillna("N/A", inplace=True)  # Replace None or "" values
   qc_df.to_csv(input_dir / f"{samplename}_irma_qc_summary.tsv", sep="\t", index=False)
   logger.debug("QC summary written.")
 
