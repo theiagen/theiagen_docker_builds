@@ -35,8 +35,8 @@ def compute_epiweek(dates):
     return iso["year"].astype(str) + "W" + iso["week"].astype(str).str.zfill(2)
 
 
-def freyja_to_long(input_tsv, output_csv, sample_col, group_by="date"):
-    required_cols = [sample_col, "freyja_lineages", "freyja_abundances"] + METADATA_COLS
+def freyja_to_long(input_tsv, output_csv, sample_col, group_by="date", mincov=0):
+    required_cols = [sample_col, "freyja_lineages", "freyja_abundances", "freyja_coverage"] + METADATA_COLS
     existing_cols = set(pd.read_csv(input_tsv, sep="\t", nrows=0).columns)
     freyja_variance_df = pd.read_csv(
         input_tsv,
@@ -44,6 +44,22 @@ def freyja_to_long(input_tsv, output_csv, sample_col, group_by="date"):
         usecols=[c for c in required_cols if c in existing_cols],
         dtype={"freyja_lineages": str, "freyja_abundances": str},
     )
+
+    if mincov > 0:
+        if "freyja_coverage" not in freyja_variance_df.columns:
+            sys.exit("Error: --mincov requested but 'freyja_coverage' column not found in input")
+        coverage = pd.to_numeric(freyja_variance_df["freyja_coverage"], errors="coerce")
+        keep = coverage >= mincov
+        dropped = (~keep).sum()
+        if dropped:
+            print(f"Filtered out {dropped} samples below coverage {mincov}", file=sys.stderr)
+        freyja_variance_df = freyja_variance_df[keep].copy()
+        if freyja_variance_df.empty:
+            message = f"all samples are below coverage {mincov}"
+            with open(output_csv, "w") as f:
+                f.write(message + "\n")
+            print(message)
+            return
 
     if group_by == "week":
         freyja_variance_df["week"] = compute_epiweek(pd.to_datetime(freyja_variance_df["collection_date"]))
@@ -104,5 +120,7 @@ if __name__ == "__main__":
     parser.add_argument("--sample-col", required=True, help="Column name in the TSV to use as the sample identifier")
     parser.add_argument("--group-by", choices=["date", "week"], default="date",
                         help="Aggregation key: 'date' groups by site+collection_date (default); 'week' groups by site+MMWR epiweek (Sun-Sat) and drops date parts from output")
+    parser.add_argument("--mincov", type=float, default=0,
+                        help="Minimum freyja_coverage to keep a sample (default 0, no filtering). Samples below this threshold are dropped.")
     args = parser.parse_args()
-    freyja_to_long(args.input_tsv, args.output_tsv, args.sample_col, args.group_by)
+    freyja_to_long(args.input_tsv, args.output_tsv, args.sample_col, args.group_by, args.mincov)
