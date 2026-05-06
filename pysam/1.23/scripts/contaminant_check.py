@@ -102,23 +102,24 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="task_contaminant_check.py dependency script (github.com/theiagen/public_health_bioinformatics)"
     )
-    parser.add_argument("--expected_sequences", required=True)
-    parser.add_argument("--minimum_expected_sequences")
-    parser.add_argument("--maximum_unexpected_sequences", default=0)
+    parser.add_argument("--expected_sequences", required=True, nargs="+")
+    parser.add_argument("--minimum_expected_sequences", type=int)
+    parser.add_argument("--maximum_unexpected_sequences", type=int, default=0)
     parser.add_argument("--coverage_by_sequence_json", required=True)
     parser.add_argument("--depth_by_sequence_json", required=True)
     parser.add_argument("--reads_by_sequence_json", required=True)
     parser.add_argument("--contaminant_fasta", required=True)
-    parser.add_argument("--minimum_percent_coverage", required=True)
-    parser.add_argument("--minimum_depth", required=True)
-    parser.add_argument("--minimum_reads_mapped", required=True)
+    parser.add_argument("--minimum_percent_coverage", type=float, required=True)
+    parser.add_argument("--minimum_depth", type=int, required=True)
+    parser.add_argument("--minimum_reads_mapped", type=int, required=True)
     args = parser.parse_args()
 
     # convert comma-separated string of expected sequences into a set
     expected_sequences = set(
         [
             seq.strip()
-            for seq in args.expected_sequences.strip('"').strip("'").split(",")
+            # reconstruct the comma-delimited list prior to splitting
+            for seq in "".join(args.expected_sequences).strip('"').strip("'").split(",")
             if seq.strip()
         ]
     )
@@ -152,13 +153,13 @@ if __name__ == "__main__":
 
     # check if any expected sequences are present above the specified thresholds
     failing_sequences_coverage, passing_sequences_coverage = apply_thresholds(
-        coverage_by_sequence, args.mininimum_percent_coverage
+        coverage_by_sequence, args.minimum_percent_coverage
     )
     failing_sequences_depth, passing_sequences_depth = apply_thresholds(
         depth_by_sequence, args.minimum_depth
     )
     failing_sequences_reads, passing_sequences_reads = apply_thresholds(
-        reads_by_sequence, args.mininimum_reads_mapped
+        reads_by_sequence, args.minimum_reads_mapped
     )
 
     failing_sequences = failing_sequences_coverage.union(failing_sequences_depth).union(

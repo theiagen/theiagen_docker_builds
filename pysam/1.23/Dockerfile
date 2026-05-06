@@ -65,6 +65,9 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 # copy in samtools executables from builder stage
 COPY --from=builder /usr/local/bin/* /usr/local/bin/
 
+# add local script
+COPY scripts/contaminant_check.py /usr/bin/
+
 ENV LC_ALL=C
 
 # final working directory is /data
@@ -90,13 +93,13 @@ RUN apt-get update && apt-get install --no-install-recommends -y wget ca-certifi
 WORKDIR /test
 
 RUN echo "Testing samtools stats and samtools faidx on SARS-CoV-2 amplicon data" && \
-wget -q https://raw.githubusercontent.com/StaPH-B/docker-builds/master/tests/SARS-CoV-2/SRR13957123.consensus.fa && \
-wget -q https://raw.githubusercontent.com/StaPH-B/docker-builds/master/tests/SARS-CoV-2/SRR13957123.primertrim.sorted.bam && \
-wget -q https://raw.githubusercontent.com/artic-network/artic-ncov2019/master/primer_schemes/nCoV-2019/V3/nCoV-2019.primer.bed && \
-samtools stats SRR13957123.primertrim.sorted.bam > SRR13957123.stats.txt && \
-echo "Showing first 20 lines of samtools stats output:" && \
-head -n 20 SRR13957123.stats.txt && \
-samtools faidx SRR13957123.consensus.fa && \
-samtools ampliconstats nCoV-2019.primer.bed SRR13957123.primertrim.sorted.bam > SRR13957123_ampliconstats.txt && \
-plot-ampliconstats plot SRR13957123_ampliconstats.txt && \
-ls
+  wget -q https://raw.githubusercontent.com/StaPH-B/docker-builds/master/tests/SARS-CoV-2/SRR13957123.consensus.fa && \
+  wget -q https://raw.githubusercontent.com/StaPH-B/docker-builds/master/tests/SARS-CoV-2/SRR13957123.primertrim.sorted.bam && \
+  wget -q https://raw.githubusercontent.com/artic-network/artic-ncov2019/master/primer_schemes/nCoV-2019/V3/nCoV-2019.primer.bed && \
+  samtools stats SRR13957123.primertrim.sorted.bam > SRR13957123.stats.txt && \
+  echo "Showing first 20 lines of samtools stats output:" && \
+  head -n 20 SRR13957123.stats.txt && \
+  samtools faidx SRR13957123.consensus.fa && \
+  samtools ampliconstats nCoV-2019.primer.bed SRR13957123.primertrim.sorted.bam > SRR13957123_ampliconstats.txt && \
+  plot-ampliconstats plot SRR13957123_ampliconstats.txt && \
+  ls
