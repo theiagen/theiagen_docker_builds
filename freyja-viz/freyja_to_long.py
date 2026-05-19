@@ -42,7 +42,7 @@ def freyja_to_long(input_tsv, output_csv, sample_col, group_by="date", mincov=0)
         input_tsv,
         sep="\t",
         usecols=[c for c in required_cols if c in existing_cols],
-        dtype={"freyja_lineages": str, "freyja_abundances": str},
+        dtype={sample_col: str, "freyja_lineages": str, "freyja_abundances": str},
     )
 
     if mincov > 0:
