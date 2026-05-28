@@ -1,0 +1,70 @@
+name: Build & Push Docker ImageS
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: general-theiagen
+  LOCATION: us
+  REPOSITORY: theiagen
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  find-new-dockerfiles:
+    runs-on: ubuntu-latest
+    outputs:
+      json: ${{ steps.files.outputs.added_modified }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: files
+        uses: Ana06/get-changed-files@v2.3.0
+        with:
+          format: "json"
+          filter: "*/*/Dockerfile"
+      - run: "echo ${{ steps.files.outputs.all }}"
+
+  build-and-push:
+    needs: find-new-dockerfiles
+    if: needs.find-new-dockerfiles.outputs.json != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        added_modified: ${{ fromJson(needs.find-new-dockerfiles.outputs.json) }}
+
+    steps:
+      - name: Parse file paths
+        id: parse
+        run: |
+          echo "parsing ${{ matrix.added_modified }}"
+          tool=$(echo "{{ matrix.added_modified }}" | cut -f2 -d "/")
+          version=$(echo "{{ matrix.added_modified }}" | cut -f3 -d "/")
+          echo "found tool:version ${tool}:${version}"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.WIP_PROVIDER }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.LOCATION }}-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        run: |
+          docker build --target app \
+            -t ${{ env.LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ steps.parse.outputs.tool }}:${{ steps.parse.outputs.version }} \
+            -t ${{ env.LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ steps.parse.outputs.tool }}:latest \
+            ./${{ steps.parse.outputs.tool }}/${{ steps.parse.outputs.version }}
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ steps.parse.outputs.tool }}:${{ steps.parse.outputs.version }}
+          docker push ${{ env.LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ steps.parse.outputs.tool }}:latest
