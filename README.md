@@ -1,5 +1,8 @@
 # Theiagen hosted docker images
 
+PLEASE USE THE STAPH-B DOCKER BUILDS TEMPLATES FOR ALL NEW DOCKER FILES
+See <https://github.com/StaPH-B/docker-builds/tree/master/dockerfile-template>
+
 ## Production (public)
 
 Use the docker repository for production images. This is a public repository, so anyone can pull from it. This is where we will push images that are used for production.
