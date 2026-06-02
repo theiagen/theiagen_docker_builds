@@ -16,7 +16,7 @@ LABEL maintainer.email="ines.mendes@theiagen.com"
 LABEL maintainer2="Curtis Kapsak"
 LABEL maintainer2.email="kapsakcj@gmail.com"
 
-# Install dependencies via apt; cleanup apt garbage
+# install dependencies via apt; cleanup apt garbage
 # deps needed specifically for db download scripts: libfile-which-perl, curl, parallel
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \

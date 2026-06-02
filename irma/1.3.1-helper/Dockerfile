@@ -1,5 +1,5 @@
 # building from staphb/irma as the base
-FROM staphb/irma:1.3.1
+FROM staphb/irma:1.3.1 AS app
 
 # metadata
 LABEL base.image="staphb/irma:1.3.1"
