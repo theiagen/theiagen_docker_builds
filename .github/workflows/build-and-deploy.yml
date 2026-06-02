@@ -41,8 +41,8 @@ jobs:
         id: parse
         run: |
           echo "parsing ${{ matrix.added_modified }}"
-          tool=$(echo "${{ matrix.added_modified }}" | cut -f2 -d "/")
-          version=$(echo "${{ matrix.added_modified }}" | cut -f3 -d "/")
+          tool=$(echo "${{ matrix.added_modified }}" | cut -f1 -d "/")
+          version=$(echo "${{ matrix.added_modified }}" | cut -f2 -d "/")
           echo "found tool:version ${tool}:${version}"
           echo "tool=$tool" >> $GITHUB_OUTPUT
           echo "version=$version" >> $GITHUB_OUTPUT
