@@ -44,6 +44,8 @@ jobs:
           tool=$(echo "${{ matrix.added_modified }}" | cut -f2 -d "/")
           version=$(echo "${{ matrix.added_modified }}" | cut -f3 -d "/")
           echo "found tool:version ${tool}:${version}"
+          echo "tool=$tool" >> $GITHUB_OUTPUT
+          echo "version=$version" >> $GITHUB_OUTPUT
 
       - name: Checkout
         uses: actions/checkout@v4
