@@ -1,7 +1,7 @@
 # building from staphb/irma as the base
 FROM staphb/irma:1.3.1
 
-# Metadata
+# metadata
 LABEL base.image="staphb/irma:1.3.1"
 LABEL software="IRMA"
 LABEL software.version="1.3.1"
