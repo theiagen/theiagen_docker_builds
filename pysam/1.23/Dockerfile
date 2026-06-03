@@ -1,4 +1,5 @@
 ARG SAMTOOLS_VER="1.23"
+ARG CONTAMINANT_CHECK_VER="1.0.0"
 
 FROM ubuntu:jammy AS builder
 
@@ -34,6 +35,7 @@ RUN wget -q https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VE
 FROM ubuntu:jammy AS app
 
 ARG SAMTOOLS_VER
+ARG CONTAMINANT_CHECK_VER
 
 LABEL base.image="ubuntu:jammy"
 LABEL dockerfile.version="1"
@@ -66,7 +68,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 COPY --from=builder /usr/local/bin/* /usr/local/bin/
 
 # add local script
-COPY scripts/contaminant_check.py /usr/bin/
+COPY ../scripts/contaminant_check/${CONTAMINANT_CHECK_VER}/contaminant_check.py /usr/bin/
 
 ENV LC_ALL=C
 
