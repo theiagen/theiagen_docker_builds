@@ -111,9 +111,17 @@ def quantify_gene_coverage(
                 depths.append(total_depth)
             depth_dict[query] = sum(depths) / len(depths)
             # breadth is percent of covered bases exceeding min_depth
-            coverage_dict[query] = sum(coverages) / len(coverages)
+            coverage_dict[query] = 100 * (sum(coverages) / len(coverages))
 
     return depth_dict, coverage_dict
+
+
+def make_csv(depth_dict: dict, coverage_dict: dict) -> str:
+    """Make a readable CSV to convey depth and coverage"""
+    csv_str = "#gene,average_depth,percent_coverage\n"
+    for query, depth in depth_dict.items():
+        csv_str += f"{query},{depth},{coverage_dict[query]}\n"
+    return csv_str.strip()
 
 
 if __name__ == "__main__":
@@ -163,6 +171,11 @@ if __name__ == "__main__":
     depth_dict, coverage_dict = quantify_gene_coverage(
         args.bamfile, contig2query2coords, args.min_depth
     )
+
+    csv_str = make_csv(depth_dict, coverage_dict)
+    with open("COVERAGE_STATS.csv", "w") as out:
+        out.write(csv_str)
+
 
     write_json("DEPTH_DICT.json", depth_dict)
     write_json("COVERAGE_DICT.json", coverage_dict)
