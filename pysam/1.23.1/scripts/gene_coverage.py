@@ -171,11 +171,19 @@ if __name__ == "__main__":
         args.bam, contig2query2coords, args.min_depth
     )
 
+    write_json("DEPTH_DICT.json", depth_dict)
+    write_json("COVERAGE_DICT.json", coverage_dict)
+
+    # add missing entries to TSV report
+    missing_genes = query_set.difference(set(coverage_dict.keys()))
+    for gene in missing_genes:
+        # depth may be reported for those that have no breadth
+        if gene not in depth_dict:
+            depth_dict[gene] = 0
+        coverage_dict[gene] = 0
+
     tsv_str = make_tsv(depth_dict, coverage_dict)
     with open("COVERAGE_STATS.tsv", "w") as out:
         out.write(tsv_str)
-
-    write_json("DEPTH_DICT.json", depth_dict)
-    write_json("COVERAGE_DICT.json", coverage_dict)
 
     sys.exit(0)
