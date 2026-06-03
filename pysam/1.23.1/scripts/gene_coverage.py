@@ -118,7 +118,7 @@ def quantify_gene_coverage(
 
 def make_tsv(depth_dict: dict, coverage_dict: dict) -> str:
     """Make a readable TSV to convey depth and coverage"""
-    tsv_str = "#gene\taverage_depth\tpercent_coverage\n"
+    tsv_str = "#query\taverage_depth\tpercent_coverage\n"
     for query, depth in depth_dict.items():
         tsv_str += f"{query}\t{depth}\t{coverage_dict[query]}\n"
     return tsv_str.strip()
