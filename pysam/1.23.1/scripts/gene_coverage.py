@@ -176,7 +176,6 @@ if __name__ == "__main__":
     with open("COVERAGE_STATS.csv", "w") as out:
         out.write(csv_str)
 
-
     write_json("DEPTH_DICT.json", depth_dict)
     write_json("COVERAGE_DICT.json", coverage_dict)
 
