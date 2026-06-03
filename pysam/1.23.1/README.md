@@ -1,6 +1,6 @@
-# PySam container
+# Pysam container
 
-Main tool: [PySam](https://github.com/pysam-developers/pysam) | [samtools](https://github.com/samtools/samtools)
+Main tool: [Pysam](https://github.com/pysam-developers/pysam) | [samtools](https://github.com/samtools/samtools)
 
 Code repository: [theiagen_docker_builds](https://github.com/theiagen_docker_builds/)
 
