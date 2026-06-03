@@ -2,7 +2,7 @@
 
 Main tool: [PySam](https://github.com/pysam-developers/pysam) | [samtools](https://github.com/samtools/samtools)
 
-Code repository:
+Code repository: [theiagen_docker_builds](https://github.com/theiagen_docker_builds/)
 
 Additional tools:
 - biopython 1.87
@@ -11,6 +11,9 @@ Additional tools:
 - samtools 1.23 
 - contaminant_check.py NA
 - gene_coverage.py NA
+
+## Changes
+Add `gene_coverage.py` and `biopython`
 
 ## Example Usage
 
