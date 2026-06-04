@@ -13,6 +13,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def input_error_handling(args: argparse.ArgumentParser) -> None:
+    """Handle incompatible input arguments"""
+    if not args.bedfile and not args.reference_gbff:
+        raise FileNotFoundError("'reference_gbff' or 'bedfile' is required")
+    elif not args.query_genes and not args.bedfile:
+        raise ValueError("'query_genes' or 'bedfile' required")
+
+
 def exact_check(query_set: set, id: str) -> bool:
     """Return True or False for an exact match"""
     return id in query_set
@@ -21,6 +29,12 @@ def exact_check(query_set: set, id: str) -> bool:
 def substring_check(query_set: set, id: str) -> bool:
     """Return True or False for a substring match"""
     return any(query in id for query in query_set)
+
+
+def extract_queries_from_bed(bedfile):
+    """Extract query regions from BED"""
+    with open(bedfile, "r") as raw:
+        return set(x.split()[3] for x in raw)
 
 
 def write_json(filename: str, data: dict) -> None:
@@ -81,12 +95,24 @@ def parse_bed(
     return contig2query2coords
 
 
+def import_bam(bamfile: str, contig2query2coords: dict, ambiguous_contig: bool) -> tuple:
+    imported_bam = pysam.AlignmentFile(bamfile)
+    # apply coordinates to first selected contig
+    if ambiguous_contig:
+        contig_names = imported_bam.references
+        # can't apply ambiguous contig approach if there are multiple contigs
+        if len(contig_names) > 1:
+            raise ValueError("can't use ambiguous_contig coordinates when there are multiple contigs in the reference")
+        contig = contig_names[0]
+        # rename contig2query2coords to reflect first contig
+        contig2query2coords = {contig: v for k, v in contig2query2coords.items()}
+    return imported_bam, contig2query2coords
+
+
 def quantify_gene_coverage(
-    bamfile: str, contig2query2coords: dict, min_depth: int = 1
+    imported_bam: pysam.AlignmentFile, contig2query2coords: dict, min_depth: int = 1
 ) -> tuple:
     """Quantify gene breadth and depth off coverage"""
-    imported_bam = pysam.AlignmentFile(bamfile)
-
     depth_dict = {}
     coverage_dict = {}
 
@@ -113,12 +139,16 @@ def quantify_gene_coverage(
             # breadth is percent of covered bases exceeding min_depth
             coverage_dict[query] = 100 * (sum(coverages) / len(coverages))
 
-    return depth_dict, coverage_dict
+    return dict(sorted(depth_dict.items())), dict(sorted(coverage_dict.items()))
 
 
-def make_tsv(depth_dict: dict, coverage_dict: dict) -> str:
+def make_tsv(depth_dict: dict, coverage_dict: dict, ambiguous_contig: bool) -> str:
     """Make a readable TSV to convey depth and coverage"""
-    tsv_str = "#query\taverage_depth\tpercent_coverage\n"
+    if ambiguous_contig:
+        name = "query (WARNING: results may be inaccurate if sample is not mapped to reference used to generate BED file coordinates)"
+    else:
+        name = "query"
+    tsv_str = f"#{name}\taverage_depth\tpercent_coverage\n"
     for query, depth in depth_dict.items():
         tsv_str += f"{query}\t{depth}\t{coverage_dict[query]}\n"
     return tsv_str.strip()
@@ -131,15 +161,16 @@ if __name__ == "__main__":
     parser.add_argument("--bam", required=True)
     parser.add_argument("--bedfile")
     parser.add_argument("--reference_gbff")
-    parser.add_argument("--query_genes", required=True, nargs="+")
+    parser.add_argument("--query_genes", nargs="+")
     parser.add_argument("--feature_type", default="mRNA")
     parser.add_argument("--feature_qualifier", default="product")
     parser.add_argument("--exact_match", action="store_true")
+    parser.add_argument("--ambiguous_contig", action="store_true")
     parser.add_argument("--min_depth", type=int, default=1)
     args = parser.parse_args()
 
-    if not args.bedfile and not args.reference_gbff:
-        raise FileNotFoundError("'reference_gbff' or 'bedfile' is required")
+    # error parsing
+    input_error_handling(args)
 
     # set comparison check function
     if args.exact_match:
@@ -148,9 +179,12 @@ if __name__ == "__main__":
         id_check = substring_check
 
     # import queries
-    query_set = set()
-    for queries in args.query_genes:
-        query_set = query_set.union(q.strip() for q in queries.split(","))
+    if args.query_genes:
+        query_set = set()
+        for queries in args.query_genes:
+            query_set = query_set.union(q.strip() for q in queries.split(","))
+    else:
+        query_set = extract_queries_from_bed(args.bedfile)
 
     contig2query2coords = defaultdict(dict)
     if args.reference_gbff:
@@ -167,10 +201,13 @@ if __name__ == "__main__":
             args.bedfile, query_set, id_check, contig2query2coords
         )
 
-    depth_dict, coverage_dict = quantify_gene_coverage(
-        args.bam, contig2query2coords, args.min_depth
-    )
+    # import BAM and modify contig coordinates if needed
+    imported_bam, contig2query2coords = import_bam(args.bam, contig2query2coords, args.ambiguous_contig)
 
+    # quantify statistics and write
+    depth_dict, coverage_dict = quantify_gene_coverage(
+        imported_bam, contig2query2coords, args.min_depth
+    )
     write_json("DEPTH_DICT.json", depth_dict)
     write_json("COVERAGE_DICT.json", coverage_dict)
 
@@ -182,7 +219,7 @@ if __name__ == "__main__":
             depth_dict[gene] = 0
         coverage_dict[gene] = 0
 
-    tsv_str = make_tsv(depth_dict, coverage_dict)
+    tsv_str = make_tsv(depth_dict, coverage_dict, args.ambiguous_contig and args.bedfile)
     with open("COVERAGE_STATS.tsv", "w") as out:
         out.write(tsv_str)
 
