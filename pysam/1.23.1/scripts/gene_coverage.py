@@ -72,10 +72,10 @@ def parse_gbff(
                                 logger.warning(
                                     f"{qualifier_id} recovered multiple times in {record.name}"
                                 )
-                            # GenBanks are 1-based coordinates, which we need to adjust for PySam
+                            # GenBanks are 1-based coordinates, though BioPython adjusts natively
                             contig2query2coords[record_id][qualifier_id] = (
-                                int(feature.location.start) - 1,
-                                int(feature.location.end) - 1,
+                                int(feature.location.start),
+                                int(feature.location.end),
                             )
     return contig2query2coords
 
