@@ -58,7 +58,7 @@ def parse_gbff(
     """Parse a GBFF to obtain query coordinates"""
     with open(reference_gbff) as handle:
         for record in SeqIO.parse(handle, "genbank"):
-            record_id = record.id
+            record_id = record.name
             for feature in record.features:
                 # is this the feature we want to scan?
                 if feature.type.lower() == feature_type.lower():
@@ -70,13 +70,11 @@ def parse_gbff(
                         if id_check(query_set, qualifier_id):
                             if qualifier_id in contig2query2coords[record_id]:
                                 logger.warning(
-                                    f"{qualifier_id} recovered multiple times in {record.name}"
+                                    f"{qualifier_id} recovered multiple times in {record_id}"
                                 )
                             # GenBanks are 1-based coordinates, though BioPython adjusts natively
-                            contig2query2coords[record_id][qualifier_id] = (
-                                int(feature.location.start),
-                                int(feature.location.end),
-                            )
+                            loc_coords = [[int(x.start), int(x.end)] for x in feature.location.parts]
+                            contig2query2coords[record_id][qualifier_id].extend(loc_coords)
     return contig2query2coords
 
 
@@ -92,7 +90,7 @@ def parse_bed(
                 # is this an entry we want?
                 if id_check(query_set, id):
                     # BED files are 0-based coordinates
-                    contig2query2coords[data[0]][id] = (int(data[1]), int(data[2]))
+                    contig2query2coords[data[0]][id].append((int(data[1]), int(data[2])))
     return contig2query2coords
 
 
@@ -128,26 +126,27 @@ def quantify_gene_coverage(
     coverage_dict = {}
 
     for contig, query2coords in contig2query2coords.items():
-        for query, coords in query2coords.items():
+        for query, loc_parts in query2coords.items():
             if query in depth_dict:
                 logger.warning(
                     f"{query} is present on multiple contigs and will be overwritten"
                 )
             # check coverage data across range
-            coverage_data = imported_bam.count_coverage(contig, coords[0], coords[1], quality_threshold=min_quality)
             depths = []
             coverages = []
-            for i, pos in enumerate(range(coords[0], coords[1])):
-                # calculate total depth across bases
-                total_depth = (
-                    coverage_data[0][i]
-                    + coverage_data[1][i]
-                    + coverage_data[2][i]
-                    + coverage_data[3][i]
-                )
-                # base is considered covered if beyond minimum depth
-                coverages.append(total_depth >= min_depth)
-                depths.append(total_depth)
+            for coords in loc_parts:
+                coverage_data = imported_bam.count_coverage(contig, coords[0], coords[1], quality_threshold=min_quality)
+                for i, pos in enumerate(range(coords[0], coords[1])):
+                    # calculate total depth across bases
+                    total_depth = (
+                        coverage_data[0][i]
+                        + coverage_data[1][i]
+                        + coverage_data[2][i]
+                        + coverage_data[3][i]
+                    )
+                    # base is considered covered if beyond minimum depth
+                    coverages.append(total_depth >= min_depth)
+                    depths.append(total_depth)
             depth_dict[query] = sum(depths) / len(depths)
             # breadth is percent of covered bases exceeding min_depth
             coverage_dict[query] = 100 * (sum(coverages) / len(coverages))
@@ -175,7 +174,7 @@ if __name__ == "__main__":
     parser.add_argument("--bedfile")
     parser.add_argument("--reference_gbff")
     parser.add_argument("--query_genes", nargs="+")
-    parser.add_argument("--feature_type", default="mRNA")
+    parser.add_argument("--feature_type", default="CDS")
     parser.add_argument("--feature_qualifier", default="product")
     parser.add_argument("--exact_match", action="store_true")
     parser.add_argument("--ambiguous_contig", action="store_true")
@@ -200,7 +199,8 @@ if __name__ == "__main__":
     else:
         query_set = extract_queries_from_bed(args.bedfile)
 
-    contig2query2coords = defaultdict(dict)
+    # {<CONTIG>: <QUERY>: [(LOC_START_1, LOC_END_1,), (LOC_START_n, LOC_END_n),]}
+    contig2query2coords = defaultdict(lambda: defaultdict(list))
     if args.reference_gbff:
         contig2query2coords = parse_gbff(
             args.reference_gbff,
