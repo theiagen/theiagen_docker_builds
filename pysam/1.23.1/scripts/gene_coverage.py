@@ -120,7 +120,7 @@ def import_bam(
 
 
 def quantify_gene_coverage(
-    imported_bam: pysam.AlignmentFile, contig2query2coords: dict, min_depth: int = 1
+    imported_bam: pysam.AlignmentFile, contig2query2coords: dict, min_depth: int = 1, min_quality: int = 1
 ) -> tuple:
     """Quantify gene breadth and depth off coverage"""
     depth_dict = {}
@@ -133,7 +133,7 @@ def quantify_gene_coverage(
                     f"{query} is present on multiple contigs and will be overwritten"
                 )
             # check coverage data across range
-            coverage_data = imported_bam.count_coverage(contig, coords[0], coords[1])
+            coverage_data = imported_bam.count_coverage(contig, coords[0], coords[1], quality_threshold=min_quality)
             depths = []
             coverages = []
             for i, pos in enumerate(range(coords[0], coords[1])):
@@ -179,6 +179,7 @@ if __name__ == "__main__":
     parser.add_argument("--exact_match", action="store_true")
     parser.add_argument("--ambiguous_contig", action="store_true")
     parser.add_argument("--min_depth", type=int, default=1)
+    parser.add_argument("--min_quality", type=int, default=0)
     args = parser.parse_args()
 
     # error parsing
@@ -220,7 +221,7 @@ if __name__ == "__main__":
 
     # quantify statistics and write
     depth_dict, coverage_dict = quantify_gene_coverage(
-        imported_bam, contig2query2coords, args.min_depth
+        imported_bam, contig2query2coords, args.min_depth, args.min_quality
     )
     write_json("DEPTH_DICT.json", depth_dict)
     write_json("COVERAGE_DICT.json", coverage_dict)
