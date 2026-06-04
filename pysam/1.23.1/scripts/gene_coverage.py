@@ -95,14 +95,18 @@ def parse_bed(
     return contig2query2coords
 
 
-def import_bam(bamfile: str, contig2query2coords: dict, ambiguous_contig: bool) -> tuple:
+def import_bam(
+    bamfile: str, contig2query2coords: dict, ambiguous_contig: bool
+) -> tuple:
     imported_bam = pysam.AlignmentFile(bamfile)
     # apply coordinates to first selected contig
     if ambiguous_contig:
         contig_names = imported_bam.references
         # can't apply ambiguous contig approach if there are multiple contigs
         if len(contig_names) > 1:
-            raise ValueError("can't use ambiguous_contig coordinates when there are multiple contigs in the reference")
+            raise ValueError(
+                "can't use ambiguous_contig coordinates when there are multiple contigs in the reference"
+            )
         contig = contig_names[0]
         # rename contig2query2coords to reflect first contig
         contig2query2coords = {contig: v for k, v in contig2query2coords.items()}
@@ -128,10 +132,12 @@ def quantify_gene_coverage(
             coverages = []
             for i, pos in enumerate(range(coords[0], coords[1])):
                 # calculate total depth across bases
-                total_depth = coverage_data[0][i] \
-                    + coverage_data[1][i] \
-                    + coverage_data[2][i] \
+                total_depth = (
+                    coverage_data[0][i]
+                    + coverage_data[1][i]
+                    + coverage_data[2][i]
                     + coverage_data[3][i]
+                )
                 # base is considered covered if beyond minimum depth
                 coverages.append(total_depth >= min_depth)
                 depths.append(total_depth)
@@ -194,7 +200,7 @@ if __name__ == "__main__":
             args.feature_type,
             args.feature_qualifier,
             id_check,
-            contig2query2coords
+            contig2query2coords,
         )
     if args.bedfile:
         contig2query2coords = parse_bed(
@@ -202,7 +208,9 @@ if __name__ == "__main__":
         )
 
     # import BAM and modify contig coordinates if needed
-    imported_bam, contig2query2coords = import_bam(args.bam, contig2query2coords, args.ambiguous_contig)
+    imported_bam, contig2query2coords = import_bam(
+        args.bam, contig2query2coords, args.ambiguous_contig
+    )
 
     # quantify statistics and write
     depth_dict, coverage_dict = quantify_gene_coverage(
@@ -219,7 +227,9 @@ if __name__ == "__main__":
             depth_dict[gene] = 0
         coverage_dict[gene] = 0
 
-    tsv_str = make_tsv(depth_dict, coverage_dict, args.ambiguous_contig and args.bedfile)
+    tsv_str = make_tsv(
+        depth_dict, coverage_dict, args.ambiguous_contig and args.bedfile
+    )
     with open("COVERAGE_STATS.tsv", "w") as out:
         out.write(tsv_str)
 
