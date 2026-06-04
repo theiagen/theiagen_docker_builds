@@ -58,6 +58,7 @@ def parse_gbff(
     """Parse a GBFF to obtain query coordinates"""
     with open(reference_gbff) as handle:
         for record in SeqIO.parse(handle, "genbank"):
+            record_id = record.id
             for feature in record.features:
                 # is this the feature we want to scan?
                 if feature.type.lower() == feature_type.lower():
@@ -67,12 +68,12 @@ def parse_gbff(
                         qualifier_id = qualifier_ids[0]
                         # is this a qualifying feature?
                         if id_check(query_set, qualifier_id):
-                            if qualifier_id in contig2query2coords[record.name]:
+                            if qualifier_id in contig2query2coords[record_id]:
                                 logger.warning(
                                     f"{qualifier_id} recovered multiple times in {record.name}"
                                 )
                             # GenBanks are 1-based coordinates, which we need to adjust for PySam
-                            contig2query2coords[record.name][qualifier_id] = (
+                            contig2query2coords[record_id][qualifier_id] = (
                                 int(feature.location.start) - 1,
                                 int(feature.location.end) - 1,
                             )
