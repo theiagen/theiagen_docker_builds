@@ -102,4 +102,8 @@ RUN echo "Testing samtools stats and samtools faidx on SARS-CoV-2 amplicon data"
   samtools faidx SRR13957123.consensus.fa && \
   samtools ampliconstats nCoV-2019.primer.bed SRR13957123.primertrim.sorted.bam > SRR13957123_ampliconstats.txt && \
   plot-ampliconstats plot SRR13957123_ampliconstats.txt && \
+  python3 /usr/bin/gene_coverage.py \
+    --bam SRR13957123.primertrim.sorted.bam \
+    --bedfile nCoV-2019.primer.bed && \
+  cat COVERAGE_STATS.tsv && \
   ls
