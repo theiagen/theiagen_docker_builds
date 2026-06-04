@@ -99,6 +99,12 @@ def import_bam(
     bamfile: str, contig2query2coords: dict, ambiguous_contig: bool
 ) -> tuple:
     imported_bam = pysam.AlignmentFile(bamfile)
+    # generate an index if it does not exist
+    if not imported_bam.has_index():
+        logger.debug("Generating BAM index")
+        pysam.index(bamfile)
+        imported_bam = pysam.AlignmentFile(bamfile)
+
     # apply coordinates to first selected contig
     if ambiguous_contig:
         contig_names = imported_bam.references
