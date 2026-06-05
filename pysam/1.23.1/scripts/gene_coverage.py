@@ -73,8 +73,13 @@ def parse_gbff(
                                     f"{qualifier_id} recovered multiple times in {record_id}"
                                 )
                             # GenBanks are 1-based coordinates, though BioPython adjusts natively
-                            loc_coords = [[int(x.start), int(x.end)] for x in feature.location.parts]
-                            contig2query2coords[record_id][qualifier_id].extend(loc_coords)
+                            loc_coords = [
+                                [int(x.start), int(x.end)]
+                                for x in feature.location.parts
+                            ]
+                            contig2query2coords[record_id][qualifier_id].extend(
+                                loc_coords
+                            )
     return contig2query2coords
 
 
@@ -90,7 +95,9 @@ def parse_bed(
                 # is this an entry we want?
                 if id_check(query_set, id):
                     # BED files are 0-based coordinates
-                    contig2query2coords[data[0]][id].append((int(data[1]), int(data[2])))
+                    contig2query2coords[data[0]][id].append(
+                        (int(data[1]), int(data[2]))
+                    )
     return contig2query2coords
 
 
@@ -119,7 +126,10 @@ def import_bam(
 
 
 def quantify_gene_coverage(
-    imported_bam: pysam.AlignmentFile, contig2query2coords: dict, min_depth: int = 1, min_quality: int = 1
+    imported_bam: pysam.AlignmentFile,
+    contig2query2coords: dict,
+    min_depth: int = 1,
+    min_quality: int = 1,
 ) -> tuple:
     """Quantify gene breadth and depth off coverage"""
     depth_dict = {}
@@ -152,7 +162,9 @@ def quantify_gene_coverage(
                     raise ValueError(
                         f"Invalid region for query '{query}' on contig '{contig}': end ({end}) exceeds contig length ({contig_len})"
                     )
-                coverage_data = imported_bam.count_coverage(contig, start, end, quality_threshold=min_quality)
+                coverage_data = imported_bam.count_coverage(
+                    contig, start, end, quality_threshold=min_quality
+                )
                 for i, _ in enumerate(range(start, end)):
                     # calculate total depth across bases
                     total_depth = (
