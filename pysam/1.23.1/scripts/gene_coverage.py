@@ -124,8 +124,12 @@ def quantify_gene_coverage(
     """Quantify gene breadth and depth off coverage"""
     depth_dict = {}
     coverage_dict = {}
+    reference_names = set(imported_bam.references)
 
     for contig, query2coords in contig2query2coords.items():
+        if contig not in reference_names:
+            raise ValueError(f"Contig '{contig}' not found in BAM references")
+        contig_len = imported_bam.get_reference_length(contig)
         for query, loc_parts in query2coords.items():
             if query in depth_dict:
                 logger.warning(
@@ -135,8 +139,21 @@ def quantify_gene_coverage(
             depths = []
             coverages = []
             for coords in loc_parts:
-                coverage_data = imported_bam.count_coverage(contig, coords[0], coords[1], quality_threshold=min_quality)
-                for i, pos in enumerate(range(coords[0], coords[1])):
+                start, end = int(coords[0]), int(coords[1])
+                if end <= start:
+                    raise ValueError(
+                        f"Invalid region for query '{query}' on contig '{contig}': start ({start}) must be < end ({end})"
+                    )
+                if start < 0:
+                    raise ValueError(
+                        f"Invalid region for query '{query}' on contig '{contig}': start ({start}) must be >= 0"
+                    )
+                if end > contig_len:
+                    raise ValueError(
+                        f"Invalid region for query '{query}' on contig '{contig}': end ({end}) exceeds contig length ({contig_len})"
+                    )
+                coverage_data = imported_bam.count_coverage(contig, start, end, quality_threshold=min_quality)
+                for i, _ in enumerate(range(start, end)):
                     # calculate total depth across bases
                     total_depth = (
                         coverage_data[0][i]
@@ -147,6 +164,10 @@ def quantify_gene_coverage(
                     # base is considered covered if beyond minimum depth
                     coverages.append(total_depth >= min_depth)
                     depths.append(total_depth)
+            if not depths:
+                raise ValueError(
+                    f"No positions evaluated for query '{query}' on contig '{contig}'"
+                )
             depth_dict[query] = sum(depths) / len(depths)
             # breadth is percent of covered bases exceeding min_depth
             coverage_dict[query] = 100 * (sum(coverages) / len(coverages))
