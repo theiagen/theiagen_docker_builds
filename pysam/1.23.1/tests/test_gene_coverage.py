@@ -1,0 +1,129 @@
+from collections import defaultdict
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
+import re
+
+import pytest
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqFeature import FeatureLocation, SeqFeature
+from Bio.SeqRecord import SeqRecord
+
+
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "gene_coverage.py"
+SPEC = spec_from_file_location("gene_coverage", SCRIPT_PATH)
+gene_coverage = module_from_spec(SPEC)
+SPEC.loader.exec_module(gene_coverage)
+
+
+class MockBam:
+    def __init__(self, references, contig_lengths, default_depth=5):
+        self.references = tuple(references)
+        self._lengths = dict(contig_lengths)
+        self._default_depth = default_depth
+
+    def get_reference_length(self, contig):
+        return self._lengths[contig]
+
+    def count_coverage(self, contig, start, end, quality_threshold=0):
+        span = end - start
+        return (
+            [self._default_depth] * span,
+            [0] * span,
+            [0] * span,
+            [0] * span,
+        )
+
+
+def _write_mock_gbff(path, contig="contig1", gene="geneA", start=10, end=20):
+    record = SeqRecord(Seq("ATCG" * 50), id=contig, name=contig, description="")
+    record.annotations["molecule_type"] = "DNA"
+    record.features.append(
+        SeqFeature(
+            FeatureLocation(start, end),
+            type="CDS",
+            qualifiers={"product": [gene]},
+        )
+    )
+    with open(path, "w") as handle:
+        SeqIO.write(record, handle, "genbank")
+
+
+def test_parse_gbff_extracts_expected_coordinates(tmp_path):
+    gbff = tmp_path / "mock.gbff"
+    _write_mock_gbff(gbff, contig="contig1", gene="geneA", start=10, end=20)
+
+    contig2query2coords = defaultdict(lambda: defaultdict(list))
+    parsed = gene_coverage.parse_gbff(
+        str(gbff),
+        {"geneA"},
+        "CDS",
+        "product",
+        gene_coverage.exact_check,
+        contig2query2coords,
+    )
+
+    assert parsed["contig1"]["geneA"] == [[10, 20]]
+
+
+def test_bed_and_gbff_coordinates_agree_for_same_gene(tmp_path):
+    gbff = tmp_path / "mock.gbff"
+    _write_mock_gbff(gbff, contig="contig1", gene="geneA", start=10, end=20)
+
+    bed = tmp_path / "mock.bed"
+    bed.write_text("contig1\t10\t20\tgeneA\n")
+
+    from_gbff = gene_coverage.parse_gbff(
+        str(gbff),
+        {"geneA"},
+        "CDS",
+        "product",
+        gene_coverage.exact_check,
+        defaultdict(lambda: defaultdict(list)),
+    )
+    from_bed = gene_coverage.parse_bed(
+        str(bed),
+        {"geneA"},
+        gene_coverage.exact_check,
+        defaultdict(lambda: defaultdict(list)),
+    )
+
+    gbff_coords = [tuple(x) for x in from_gbff["contig1"]["geneA"]]
+    bed_coords = [tuple(x) for x in from_bed["contig1"]["geneA"]]
+    assert gbff_coords == bed_coords == [(10, 20)]
+
+
+def test_quantify_gene_coverage_known_depth_and_breadth():
+    mock_bam = MockBam(references=["contig1"], contig_lengths={"contig1": 100}, default_depth=5)
+    contig2query2coords = {"contig1": {"geneA": [(10, 20)]}}
+
+    depth_dict, coverage_dict = gene_coverage.quantify_gene_coverage(
+        mock_bam,
+        contig2query2coords,
+        min_depth=1,
+        min_quality=0,
+    )
+
+    assert depth_dict["geneA"] == 5.0
+    assert coverage_dict["geneA"] == 100.0
+
+
+@pytest.mark.parametrize(
+    "coords, message_fragment",
+    [
+        ({"contig1": {"geneA": [(10, 10)]}}, "start (10) must be < end (10)"),
+        (
+            {"contig1": {"geneA": [(5, 15)]}},
+            "end (15) exceeds contig length (10)",
+        ),
+        (
+            {"missing_contig": {"geneA": [(1, 5)]}},
+            "not found in BAM references",
+        ),
+    ],
+)
+def test_quantify_gene_coverage_edge_guards_raise_clean_value_errors(coords, message_fragment):
+    mock_bam = MockBam(references=["contig1"], contig_lengths={"contig1": 10}, default_depth=5)
+
+    with pytest.raises(ValueError, match=re.escape(message_fragment)):
+        gene_coverage.quantify_gene_coverage(mock_bam, coords, min_depth=1, min_quality=0)
