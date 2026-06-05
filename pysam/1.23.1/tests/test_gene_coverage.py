@@ -94,7 +94,9 @@ def test_bed_and_gbff_coordinates_agree_for_same_gene(tmp_path):
 
 
 def test_quantify_gene_coverage_known_depth_and_breadth():
-    mock_bam = MockBam(references=["contig1"], contig_lengths={"contig1": 100}, default_depth=5)
+    mock_bam = MockBam(
+        references=["contig1"], contig_lengths={"contig1": 100}, default_depth=5
+    )
     contig2query2coords = {"contig1": {"geneA": [(10, 20)]}}
 
     depth_dict, coverage_dict = gene_coverage.quantify_gene_coverage(
@@ -122,8 +124,14 @@ def test_quantify_gene_coverage_known_depth_and_breadth():
         ),
     ],
 )
-def test_quantify_gene_coverage_edge_guards_raise_clean_value_errors(coords, message_fragment):
-    mock_bam = MockBam(references=["contig1"], contig_lengths={"contig1": 10}, default_depth=5)
+def test_quantify_gene_coverage_edge_guards_raise_clean_value_errors(
+    coords, message_fragment
+):
+    mock_bam = MockBam(
+        references=["contig1"], contig_lengths={"contig1": 10}, default_depth=5
+    )
 
     with pytest.raises(ValueError, match=re.escape(message_fragment)):
-        gene_coverage.quantify_gene_coverage(mock_bam, coords, min_depth=1, min_quality=0)
+        gene_coverage.quantify_gene_coverage(
+            mock_bam, coords, min_depth=1, min_quality=0
+        )
