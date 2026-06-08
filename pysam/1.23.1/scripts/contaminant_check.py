@@ -33,7 +33,12 @@ def apply_thresholds(variable_by_sequence, min_value):
 
 
 def compile_failures(
-    passing_sequences, failing_sequences, expected_recovered_sequences, expected_unrecovered_sequences, variable_by_sequence, var_name
+    passing_sequences,
+    failing_sequences,
+    expected_recovered_sequences,
+    expected_unrecovered_sequences,
+    variable_by_sequence,
+    var_name,
 ):
     """Compile failing sequences based on those that are expected v. unexpected"""
     # sequences that passed coverage threshold and were expected
@@ -47,7 +52,11 @@ def compile_failures(
     if missing_sequences:
         logger.warning(f"failing {var_name}: {sorted(missing_sequences)}")
     # sequences that passed variable threshold but were not expected
-    extra_sequences = passing_sequences.union(failing_sequences).difference(expected_recovered_sequences).difference(expected_unrecovered_sequences)
+    extra_sequences = (
+        passing_sequences.union(failing_sequences)
+        .difference(expected_recovered_sequences)
+        .difference(expected_unrecovered_sequences)
+    )
     unexpected_sequences = {
         seq: variable_by_sequence[seq] for seq in sorted(extra_sequences)
     }
@@ -156,11 +165,12 @@ if __name__ == "__main__":
     logger.debug(f"expected sequences: {sorted(expected_sequences)}")
     logger.debug(f"reference sequences: {sorted(reference_sequences)}")
     logger.debug(f"expecting minimum {minimum_expected_sequences} passing sequences")
-    logger.debug(f"expecting maximum {args.maximum_unexpected_sequences} unexpected sequences")
+    logger.debug(
+        f"expecting maximum {args.maximum_unexpected_sequences} unexpected sequences"
+    )
     logger.debug(f"minimum percent coverage: {args.minimum_percent_coverage}")
     logger.debug(f"minimum depth: {args.minimum_depth}")
     logger.debug(f"minimum reads mapped: {args.minimum_reads_mapped}")
-
 
     # check if any expected sequences are present above the specified thresholds
     failing_sequences_coverage, passing_sequences_coverage = apply_thresholds(
@@ -184,12 +194,16 @@ if __name__ == "__main__":
     # sequences that were desired to be identified, but not recovered in reference FASTA
     expected_unrecovered_sequences = expected_sequences.difference(reference_sequences)
     if expected_unrecovered_sequences:
-        logger.warning(f"expected sequences not recovered in reference FASTA: {sorted(expected_unrecovered_sequences)}")
+        logger.warning(
+            f"expected sequences not recovered in reference FASTA: {sorted(expected_unrecovered_sequences)}"
+        )
     # sequences that were expected and recovered in reference FASTA
     expected_recovered_sequences = expected_sequences.difference(
         expected_unrecovered_sequences
     )
-    expected_passing_sequences = expected_recovered_sequences.intersection(passing_sequences)
+    expected_passing_sequences = expected_recovered_sequences.intersection(
+        passing_sequences
+    )
 
     # write outputs for recovered expected sequences
     expected_sequences_coverage = {}
