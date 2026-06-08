@@ -2,7 +2,7 @@
 
 Main tool: [Pysam](https://github.com/pysam-developers/pysam) | [samtools](https://github.com/samtools/samtools)
 
-Code repository: [theiagen_docker_builds](https://github.com/theiagen_docker_builds/)
+Code repository: [theiagen_docker_builds](https://github.com/theiagen/theiagen_docker_builds)
 
 Additional tools:
 - biopython 1.87
