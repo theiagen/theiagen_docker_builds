@@ -70,7 +70,7 @@ def annotate_failures(
 
 
 def write_status(
-    expected_recovered_sequences,
+    expected_passing_sequences,
     minimum_expected_sequences,
     unexpected_sequences,
     maximum_unexpected_sequences,
@@ -80,12 +80,12 @@ def write_status(
     with open("STATUS", "w") as f:
         # check if a pass/fail threshold was infringed
         if (
-            len(expected_recovered_sequences) < minimum_expected_sequences
+            len(expected_passing_sequences) < minimum_expected_sequences
             or len(unexpected_sequences) > maximum_unexpected_sequences
         ):
             status_string = "FAIL: "
             # too few expected sequences recovered
-            if len(expected_recovered_sequences) < minimum_expected_sequences:
+            if len(expected_passing_sequences) < minimum_expected_sequences:
                 for seq, fail_reasons in sorted(seq2fail.items(), key=lambda x: x[0]):
                     status_string += f"{seq} - {', '.join(fail_reasons)}; "
             # too many unexpected sequences recovered
@@ -165,16 +165,18 @@ if __name__ == "__main__":
     failing_sequences = failing_sequences_coverage.union(failing_sequences_depth).union(
         failing_sequences_reads
     )
-    passing_sequences = passing_sequences_coverage.union(passing_sequences_depth).union(
-        passing_sequences_reads
-    )
+    # sequences must pass all 3 thresholds to count as detected expected hits
+    passing_sequences = passing_sequences_coverage.intersection(
+        passing_sequences_depth
+    ).intersection(passing_sequences_reads)
 
-    # sequences that were desired to be identified, but not recovered
+    # sequences that were desired to be identified, but not recovered in reference FASTA
     expected_unrecovered_sequences = expected_sequences.difference(reference_sequences)
-    # sequences that were expected and recovered
+    # sequences that were expected and recovered in reference FASTA
     expected_recovered_sequences = expected_sequences.difference(
         expected_unrecovered_sequences
     )
+    expected_passing_sequences = expected_recovered_sequences.intersection(passing_sequences)
 
     # write outputs for recovered expected sequences
     expected_sequences_coverage = {}
@@ -231,7 +233,7 @@ if __name__ == "__main__":
         seq2fail[seq].append("missing from reference")
 
     write_status(
-        expected_recovered_sequences,
+        expected_passing_sequences,
         minimum_expected_sequences,
         unexpected_sequences,
         args.maximum_unexpected_sequences,
