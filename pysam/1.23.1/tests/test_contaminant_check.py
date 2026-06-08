@@ -18,6 +18,9 @@ def _run_contaminant_check(
     fasta_text,
     expected_sequences="seq1,seq2",
     extra_args=None,
+    min_percent_coverage=90,
+    min_depth=5,
+    min_reads_mapped=5
 ):
     coverage = tmp_path / "coverage.json"
     depth = tmp_path / "depth.json"
@@ -43,11 +46,11 @@ def _run_contaminant_check(
         "--contaminant_fasta",
         str(fasta),
         "--minimum_percent_coverage",
-        "90",
+        str(min_percent_coverage),
         "--minimum_depth",
-        "5",
+        str(min_depth),
         "--minimum_reads_mapped",
-        "5",
+        str(min_reads_mapped),
     ]
     if extra_args:
         cmd.extend(extra_args)
