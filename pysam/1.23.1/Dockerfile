@@ -87,6 +87,11 @@ ARG SAMTOOLS_VER
 # check PATH
 RUN samtools --help
 
+COPY scripts/ /test/scripts/
+COPY tests/ /test/tests/
+
+RUN pip3 install pytest
+
 # install make and wget for downloading test files
 RUN apt-get update && apt-get install --no-install-recommends -y wget ca-certificates
 
@@ -106,4 +111,5 @@ RUN echo "Testing samtools stats and samtools faidx on SARS-CoV-2 amplicon data"
     --bam SRR13957123.primertrim.sorted.bam \
     --bedfile nCoV-2019.primer.bed && \
   cat COVERAGE_STATS.tsv && \
-  ls
+  ls && \
+  pytest -q /test/tests
