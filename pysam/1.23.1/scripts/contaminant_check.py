@@ -33,7 +33,7 @@ def apply_thresholds(variable_by_sequence, min_value):
 
 
 def compile_failures(
-    passing_sequences, expected_recovered_sequences, variable_by_sequence, var_name
+    passing_sequences, failing_sequences, expected_recovered_sequences, expected_unrecovered_sequences, variable_by_sequence, var_name
 ):
     """Compile failing sequences based on those that are expected v. unexpected"""
     # sequences that passed coverage threshold and were expected
@@ -47,7 +47,7 @@ def compile_failures(
     if missing_sequences:
         logger.warning(f"failing {var_name}: {sorted(missing_sequences)}")
     # sequences that passed variable threshold but were not expected
-    extra_sequences = passing_sequences.difference(expected_recovered_sequences)
+    extra_sequences = passing_sequences.union(failing_sequences).difference(expected_recovered_sequences).difference(expected_unrecovered_sequences)
     unexpected_sequences = {
         seq: variable_by_sequence[seq] for seq in sorted(extra_sequences)
     }
@@ -94,8 +94,10 @@ def write_status(
                     status_string += f"{seq} - extra sequence; "
             status_string = status_string.strip("; ")
             f.write(status_string)
+            logger.warning(f"failed thresholds: {status_string}")
         else:
             f.write("PASS")
+            logger.debug("passed all thresholds")
 
 
 if __name__ == "__main__":
@@ -133,7 +135,6 @@ if __name__ == "__main__":
             minimum_expected_sequences = len(expected_sequences)
     else:
         minimum_expected_sequences = len(expected_sequences)
-    logger.debug(f"expecting minimum {minimum_expected_sequences} sequences")
 
     # read in coverage and depth by sequence
     with open(args.coverage_by_sequence_json) as f:
@@ -150,6 +151,16 @@ if __name__ == "__main__":
                 # acquire the sequence from the header by removing descriptions and the ">"
                 seq = line.split()[0][1:]
                 reference_sequences.add(seq)
+
+    # debug output all arguments and thresholds
+    logger.debug(f"expected sequences: {sorted(expected_sequences)}")
+    logger.debug(f"reference sequences: {sorted(reference_sequences)}")
+    logger.debug(f"expecting minimum {minimum_expected_sequences} passing sequences")
+    logger.debug(f"expecting maximum {args.maximum_unexpected_sequences} unexpected sequences")
+    logger.debug(f"minimum percent coverage: {args.minimum_percent_coverage}")
+    logger.debug(f"minimum depth: {args.minimum_depth}")
+    logger.debug(f"minimum reads mapped: {args.minimum_reads_mapped}")
+
 
     # check if any expected sequences are present above the specified thresholds
     failing_sequences_coverage, passing_sequences_coverage = apply_thresholds(
@@ -172,6 +183,8 @@ if __name__ == "__main__":
 
     # sequences that were desired to be identified, but not recovered in reference FASTA
     expected_unrecovered_sequences = expected_sequences.difference(reference_sequences)
+    if expected_unrecovered_sequences:
+        logger.warning(f"expected sequences not recovered in reference FASTA: {sorted(expected_unrecovered_sequences)}")
     # sequences that were expected and recovered in reference FASTA
     expected_recovered_sequences = expected_sequences.difference(
         expected_unrecovered_sequences
@@ -191,22 +204,27 @@ if __name__ == "__main__":
     write_json("EXPECTED_SEQ2READS.json", expected_sequences_reads)
 
     # check results and write outputs for unexpected sequences
-    logger.debug(f"expected sequences: {sorted(expected_sequences)}")
     coverage_missing, coverage_extra = compile_failures(
         passing_sequences_coverage,
+        failing_sequences_coverage,
         expected_recovered_sequences,
+        expected_unrecovered_sequences,
         coverage_by_sequence,
         "coverage",
     )
     depth_missing, depth_extra = compile_failures(
         passing_sequences_depth,
+        failing_sequences_depth,
         expected_recovered_sequences,
+        expected_unrecovered_sequences,
         depth_by_sequence,
         "depth",
     )
     reads_missing, reads_extra = compile_failures(
         passing_sequences_reads,
+        failing_sequences_reads,
         expected_recovered_sequences,
+        expected_unrecovered_sequences,
         reads_by_sequence,
         "reads",
     )
