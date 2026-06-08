@@ -129,7 +129,7 @@ def quantify_gene_coverage(
     imported_bam: pysam.AlignmentFile,
     contig2query2coords: dict,
     min_depth: int = 1,
-    min_quality: int = 1,
+    min_quality: int = 0,
 ) -> tuple:
     """Quantify gene breadth and depth off coverage"""
     depth_dict = {}
