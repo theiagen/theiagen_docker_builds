@@ -152,3 +152,21 @@ def test_passes_when_unexpected_count_equals_maximum(tmp_path):
 
     status_text = (tmp_path / "STATUS").read_text().strip()
     assert status_text == "PASS"
+
+
+def test_each_metric_can_fail_independently(tmp_path):
+    _run_contaminant_check(
+        tmp_path,
+        '{"seq_cov": 89.0, "seq_depth": 95.0, "seq_reads": 95.0, "seq_pass": 95.0}',
+        '{"seq_cov": 10, "seq_depth": 4, "seq_reads": 10, "seq_pass": 10}',
+        '{"seq_cov": 10, "seq_depth": 10, "seq_reads": 4, "seq_pass": 10}',
+        ">seq_cov\nACTG\n>seq_depth\nACTG\n>seq_reads\nACTG\n>seq_pass\nACTG\n",
+        expected_sequences="seq_cov,seq_depth,seq_reads,seq_pass",
+        extra_args=["--minimum_expected_sequences", "4"],
+    )
+
+    status_text = (tmp_path / "STATUS").read_text().strip()
+    assert status_text.startswith("FAIL:")
+    assert "seq_cov - insufficient coverage" in status_text
+    assert "seq_depth - insufficient depth" in status_text
+    assert "seq_reads - insufficient reads" in status_text
