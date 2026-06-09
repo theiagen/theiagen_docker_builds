@@ -34,7 +34,6 @@ def apply_thresholds(variable_by_sequence, min_value):
 
 def compile_failures(
     passing_sequences,
-    failing_sequences,
     expected_recovered_sequences,
     expected_unrecovered_sequences,
     variable_by_sequence,
@@ -52,11 +51,9 @@ def compile_failures(
     if missing_sequences:
         logger.warning(f"failing {var_name}: {sorted(missing_sequences)}")
     # sequences that passed variable threshold but were not expected
-    extra_sequences = (
-        passing_sequences.union(failing_sequences)
-        .difference(expected_recovered_sequences)
-        .difference(expected_unrecovered_sequences)
-    )
+    extra_sequences = passing_sequences.difference(
+        expected_recovered_sequences
+    ).difference(expected_unrecovered_sequences)
     unexpected_sequences = {
         seq: variable_by_sequence[seq] for seq in sorted(extra_sequences)
     }
@@ -210,6 +207,10 @@ if __name__ == "__main__":
     expected_sequences_depth = {}
     expected_sequences_reads = {}
     for seq in sorted(expected_recovered_sequences):
+        # gate to prevent discrepancies from FASTA and BAM headers
+        if seq not in coverage_by_sequence:
+            logger.warning(f"{seq} expected but absent from mapping stats")
+            continue
         expected_sequences_coverage[seq] = coverage_by_sequence[seq]
         expected_sequences_depth[seq] = depth_by_sequence[seq]
         expected_sequences_reads[seq] = reads_by_sequence[seq]
@@ -220,7 +221,6 @@ if __name__ == "__main__":
     # check results and write outputs for unexpected sequences
     coverage_missing, coverage_extra = compile_failures(
         passing_sequences_coverage,
-        failing_sequences_coverage,
         expected_recovered_sequences,
         expected_unrecovered_sequences,
         coverage_by_sequence,
@@ -228,7 +228,6 @@ if __name__ == "__main__":
     )
     depth_missing, depth_extra = compile_failures(
         passing_sequences_depth,
-        failing_sequences_depth,
         expected_recovered_sequences,
         expected_unrecovered_sequences,
         depth_by_sequence,
@@ -236,7 +235,6 @@ if __name__ == "__main__":
     )
     reads_missing, reads_extra = compile_failures(
         passing_sequences_reads,
-        failing_sequences_reads,
         expected_recovered_sequences,
         expected_unrecovered_sequences,
         reads_by_sequence,
@@ -251,13 +249,13 @@ if __name__ == "__main__":
     # annotate failing sequences
     seq2fail = defaultdict(list)
     seq2fail = annotate_failures(
-        seq2fail, coverage_missing, failing_sequences, coverage_by_sequence, "coverage"
+        seq2fail, coverage_missing, failing_sequences_coverage, coverage_by_sequence, "coverage"
     )
     seq2fail = annotate_failures(
-        seq2fail, depth_missing, failing_sequences, depth_by_sequence, "depth"
+        seq2fail, depth_missing, failing_sequences_depth, depth_by_sequence, "depth"
     )
     seq2fail = annotate_failures(
-        seq2fail, reads_missing, failing_sequences, reads_by_sequence, "reads mapped"
+        seq2fail, reads_missing, failing_sequences_reads, reads_by_sequence, "reads mapped"
     )
     # these sequences are missing from the reference because they were expected
     # but not detected/accounted for in the reference FASTA
