@@ -97,6 +97,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y wget ca-certifi
 
 WORKDIR /test
 
+RUN  pytest -q /test/tests
+
 RUN echo "Testing samtools stats and samtools faidx on SARS-CoV-2 amplicon data" && \
   wget -q https://raw.githubusercontent.com/StaPH-B/docker-builds/master/tests/SARS-CoV-2/SRR13957123.consensus.fa && \
   wget -q https://raw.githubusercontent.com/StaPH-B/docker-builds/master/tests/SARS-CoV-2/SRR13957123.primertrim.sorted.bam && \
@@ -111,5 +113,4 @@ RUN echo "Testing samtools stats and samtools faidx on SARS-CoV-2 amplicon data"
     --bam SRR13957123.primertrim.sorted.bam \
     --bedfile nCoV-2019.primer.bed && \
   cat COVERAGE_STATS.tsv && \
-  ls && \
-  pytest -q /test/tests
+  ls
