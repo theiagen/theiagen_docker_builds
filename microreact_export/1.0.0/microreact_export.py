@@ -126,7 +126,7 @@ def create_tree_entry(tree_files: List[Path],
       try:
         with open(tree_file, 'r', encoding='utf-8') as tf:
           tree_content = tf.read()
-          tree_encoded, tree_id = encode(tree_content, logger)
+          tree_encoded, tree_id = encode(tree_content)
           logger.info(f"Tree file encoded with ID: {tree_id}")
           tree_name = f"{set_id}_{Path(tree_file).stem}"
           tree_files_dict[tree_id] = {
