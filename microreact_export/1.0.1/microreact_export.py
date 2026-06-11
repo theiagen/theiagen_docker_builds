@@ -119,7 +119,7 @@ def create_tree_entry(tree_files: List[Path],
   for tree_file in tree_files:
     logger.info(f"Processing tree file: {tree_file}")
     if tree_file.suffix.lower() not in allowed_file_types:
-      logger.warning(f"Skipping unsupported tree file type: {tree_file.name}")
+      logger.warning(f"Unsupported tree file type: {tree_file.name}")
       continue
     else:
       logger.info(f"Accepted tree file type: {tree_file.name}")
@@ -146,7 +146,11 @@ def create_tree_entry(tree_files: List[Path],
           }
           tree_names[tree_name] = tree_id
       except Exception as e:
-        logger.error(f"Error processing tree file {tree_file.name}: {e}")
+        raise RuntimeError(f"Error processing tree file {tree_file.name}: {e}")
+
+  if not tree_dict:
+    raise RuntimeError("No valid tree files created")
+
   return tree_files_dict, tree_dict, tree_names
 
 def create_metadata_entry(
