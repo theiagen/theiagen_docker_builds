@@ -65,13 +65,16 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 # copy in samtools executables from builder stage
 COPY --from=builder /usr/local/bin/* /usr/local/bin/
 
+# add local scripts
+COPY scripts/*.py /usr/bin/
+
 ENV LC_ALL=C
 
 # final working directory is /data
 WORKDIR /data
 
-# install pysam
-RUN pip3 install pysam
+# install pysam + biopython
+RUN pip3 install pysam biopython
 
 # default command is to pull up help options
 CMD ["samtools", "--help"]
@@ -84,19 +87,30 @@ ARG SAMTOOLS_VER
 # check PATH
 RUN samtools --help
 
+COPY scripts/ /test/scripts/
+COPY tests/ /test/tests/
+
+RUN pip3 install pytest
+
 # install make and wget for downloading test files
 RUN apt-get update && apt-get install --no-install-recommends -y wget ca-certificates
 
 WORKDIR /test
 
+RUN  pytest -q /test/tests
+
 RUN echo "Testing samtools stats and samtools faidx on SARS-CoV-2 amplicon data" && \
-wget -q https://raw.githubusercontent.com/StaPH-B/docker-builds/master/tests/SARS-CoV-2/SRR13957123.consensus.fa && \
-wget -q https://raw.githubusercontent.com/StaPH-B/docker-builds/master/tests/SARS-CoV-2/SRR13957123.primertrim.sorted.bam && \
-wget -q https://raw.githubusercontent.com/artic-network/artic-ncov2019/master/primer_schemes/nCoV-2019/V3/nCoV-2019.primer.bed && \
-samtools stats SRR13957123.primertrim.sorted.bam > SRR13957123.stats.txt && \
-echo "Showing first 20 lines of samtools stats output:" && \
-head -n 20 SRR13957123.stats.txt && \
-samtools faidx SRR13957123.consensus.fa && \
-samtools ampliconstats nCoV-2019.primer.bed SRR13957123.primertrim.sorted.bam > SRR13957123_ampliconstats.txt && \
-plot-ampliconstats plot SRR13957123_ampliconstats.txt && \
-ls
+  wget -q https://raw.githubusercontent.com/StaPH-B/docker-builds/master/tests/SARS-CoV-2/SRR13957123.consensus.fa && \
+  wget -q https://raw.githubusercontent.com/StaPH-B/docker-builds/master/tests/SARS-CoV-2/SRR13957123.primertrim.sorted.bam && \
+  wget -q https://raw.githubusercontent.com/artic-network/artic-ncov2019/master/primer_schemes/nCoV-2019/V3/nCoV-2019.primer.bed && \
+  samtools stats SRR13957123.primertrim.sorted.bam > SRR13957123.stats.txt && \
+  echo "Showing first 20 lines of samtools stats output:" && \
+  head -n 20 SRR13957123.stats.txt && \
+  samtools faidx SRR13957123.consensus.fa && \
+  samtools ampliconstats nCoV-2019.primer.bed SRR13957123.primertrim.sorted.bam > SRR13957123_ampliconstats.txt && \
+  plot-ampliconstats plot SRR13957123_ampliconstats.txt && \
+  python3 /usr/bin/gene_coverage.py \
+    --bam SRR13957123.primertrim.sorted.bam \
+    --bedfile nCoV-2019.primer.bed && \
+  cat COVERAGE_STATS.tsv && \
+  ls
