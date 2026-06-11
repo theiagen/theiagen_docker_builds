@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.13-slim AS app
 
 ARG PANDAS_VER="2.3.3"
 ARG REQUESTS_VER="2.32.5"
