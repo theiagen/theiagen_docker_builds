@@ -1,8 +1,8 @@
 # ARTIC container
 
-Main tool: [ARTIC](https://github.com/artic-network/fieldbioinformatics)
+Main tool: [ARTIC](https://artic.readthedocs.io/en/latest/)
 
-Code repository: [theiagen_docker_builds](https://github.com/theiagen/theiagen_docker_builds)
+Code repository: [ARTIC](https://github.com/artic-network/fieldbioinformatics)
 
 Additional tools:
 - environment.yml
