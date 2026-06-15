@@ -9,6 +9,7 @@ v1.0.1 of this directory copies the directory linked above exactly with the foll
 - the [original](https://github.com/ncezid-biome/pulsenet2.0-bfx/blob/47644186f2df27e9f01a000d47c451135a75f65d/processes/AlleleCalling/tests/files/qc_kb/qc.json) `tests/files/qc_kb/qc.json` has been updated to [include all entries for the "AlleleCalling" section of this JSON](https://github.com/ncezid-biome/pulsenet2.0-bfx/blob/47644186f2df27e9f01a000d47c451135a75f65d/main/tests/files/qc_kb/qc.json) as the original one is incomplete.
 - the [CHANGELOG.md](https://github.com/ncezid-biome/pulsenet2.0-bfx/blob/47644186f2df27e9f01a000d47c451135a75f65d/processes/AlleleCalling/CHANGELOG.md) and [CONTRIBUTING.md](https://github.com/ncezid-biome/pulsenet2.0-bfx/blob/47644186f2df27e9f01a000d47c451135a75f65d/processes/AlleleCalling/CONTRIBUTING.md) files have been removed from this directory for simplicity.
 - the [original README.md](https://github.com/ncezid-biome/pulsenet2.0-bfx/blob/47644186f2df27e9f01a000d47c451135a75f65d/processes/AlleleCalling/README.md) has been replaced with this one, which is specific to the Docker image used and not the actual tool's usage.
+- line 9 has `AS app` added to enable compatibility w/ our GHA
 
 The Dockerfile has been **unchanged** from the original repository.
 
