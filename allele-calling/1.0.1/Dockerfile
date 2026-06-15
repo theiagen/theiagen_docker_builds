@@ -6,7 +6,7 @@ RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
     && poetry install --no-root
 
 
-FROM python:3.11-slim
+FROM python:3.11-slim AS app
 SHELL ["/bin/bash", "-c"]
 
 ARG MINIFORGE_NAME=Mambaforge
