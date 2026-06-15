@@ -1,0 +1,4 @@
+# Created by pytest automatically.
+*/__pycache__/
+test_data/tests/.pytest_cache/
+test_data/tests/__pycache__
