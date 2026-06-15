@@ -1,0 +1,10 @@
+[project]
+name = "pulsenet2-0-trees"
+version = "1.0.0"
+description = "Distance matrix calculation and tree inference code for PulseNet 2.0 application"
+authors = ["Alan COLLINS <ukq0@cdc.gov>"]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.4.4",
+]
