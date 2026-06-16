@@ -8,6 +8,8 @@ Additional tools:
 - environment.yml
 
 ## Clair3 models
+The following [pre-trained models](https://github.com/HKU-BAL/Clair3#pre-trained-models) are included:
+
 - hifi
 - hifi_revio
 - hifi_sequel2
