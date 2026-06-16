@@ -7,7 +7,6 @@
 This directory copies the following files from the aforementioned GitHub repository:
 - [`distance_matrix.py`](https://github.com/ncezid-biome/pulsenet2.0-trees/blob/main/distance_matrix.py)
 - [`example.py`](https://github.com/ncezid-biome/pulsenet2.0-trees/blob/main/example.py)
-- [`pyproject.toml`](https://github.com/ncezid-biome/pulsenet2.0-trees/blob/main/pyproject.toml)
 - [`tree_model.py`](https://github.com/ncezid-biome/pulsenet2.0-trees/blob/main/tree_model.py)
 
 **Basic information on how to use this tool**:
@@ -17,7 +16,7 @@ This directory copies the following files from the aforementioned GitHub reposit
 
 **Additional information**:
 
-- contains numpy >=2.4.4
+- contains numpy==2.4.4
 
 **Full documentation**: [See the README.md here](https://github.com/ncezid-biome/pulsenet2.0-trees/blob/main/README.md)
 
