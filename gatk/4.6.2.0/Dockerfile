@@ -1,9 +1,9 @@
-FROM ubuntu:jammy as app
+FROM openjdk:17.0.1-jdk-slim as app
 
 ARG GATK_VER="4.6.2.0"
 
 # 'LABEL' instructions tag the image with metadata that might be important to the user
-LABEL base.image="ubuntu:jammy"
+LABEL base.image="openjdk:17.0.1-jdk-slim"
 LABEL dockerfile.version="1"
 LABEL software="GATK"
 LABEL software.version="${GATK_VER}"
@@ -16,14 +16,13 @@ LABEL maintainer.email="zachary.konkel@theiagen.com"
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Install dependencies via apt-get
-RUN apt-get update && \
-  apt-get install -y --no-install-recommends \
+RUN apt update && \
+  apt install -y --no-install-recommends \
   wget \
   git \
   git-lfs \
-  r-base \
-  openjdk-17-jre-headless && \
-  apt-get autoclean && \
+  python \
+  r-base && \
   rm -rf /var/lib/apt/lists/*
 
 # Download GATK - must be cloned to build
@@ -31,6 +30,7 @@ RUN git clone --branch ${GATK_VER} https://github.com/broadinstitute/gatk/
 
 # Build GATK only for local run
 RUN cd gatk && \
+  export GRADLE_OPTS="-Xmx4048m -Dorg.gradle.daemon=false" && \
   ./gradlew localJar 
 
 # 'CMD' instructions set a default command when the container is run. This is typically 'tool --help.'
