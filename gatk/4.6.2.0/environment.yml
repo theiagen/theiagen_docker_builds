@@ -55,11 +55,13 @@ dependencies:
   - openjdk=17.0.18=ha668962_0
   - openssl=3.6.3=h35e630c_0
   - pcre2=10.47=haa7fec5_0
+  - pip=26.1.2=pyh145f28c_0
   - pixman=0.46.4=h54a6638_1
   - pthread-stubs=0.4=hb9d3cd8_1002
   - python=3.14.6=habeac84_100_cp314
   - python_abi=3.14=8_cp314
   - readline=8.3=h853b02a_0
+  - samtools=0.1.19=h9dcdb79_15
   - tk=8.6.13=noxft_h366c992_103
   - tzdata=2025c=hc9c84f9_1
   - xorg-libice=1.1.2=hb9d3cd8_0
