@@ -11,9 +11,16 @@ Additional tools:
 - samtools 1.23 
 - contaminant_check.py NA
 - gene_coverage.py NA
+- variant_annotation.py NA
 
 ## Changes
 Modify `gene_coverage.py` to extract gene coordinates from VCF
+
+Add `variant_annotation.py` to translate query genes with detected variants and
+annotate each variant's protein-level consequence (missense/synonymous/nonsense
+substitutions, in-frame insertions/deletions and frameshifts).  When
+`gene_coverage.py` is given both `--vcf` and `--reference_gbff` it now also
+writes `VARIANT_ANNOTATIONS.txt`.
 
 ## Example Usage
 
@@ -41,3 +48,19 @@ usage: gene_coverage.py [-h] --bam BAM [--bedfile BEDFILE] [--reference_gbff REF
                         [--feature_qualifier FEATURE_QUALIFIER] [--exact_match]
                         [--min_depth MIN_DEPTH]
 ```
+
+### Variant Annotation
+```
+python3 /usr/bin/variant_annotation.py -h
+usage: variant_annotation.py [-h] --vcf VCF --reference_gbff REFERENCE_GBFF
+                             --query_genes QUERY_GENES [QUERY_GENES ...]
+                             [--feature_type FEATURE_TYPE]
+                             [--feature_qualifier FEATURE_QUALIFIER] [--exact_match]
+                             [--transl_table TRANSL_TABLE] [--output OUTPUT]
+```
+
+Example report:
+```
+lanosterol.14-alpha.demethylase: lanosterol 14-alpha demethylase (missense_variant c.395A>T p.Tyr132Phe; A:20 T:0)
+```
+

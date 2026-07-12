@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import pysam
@@ -6,6 +7,13 @@ import argparse
 from Bio import SeqIO
 from itertools import chain
 from collections import defaultdict
+
+# variant_annotation.py is deployed alongside this script (both land in /usr/bin)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import variant_annotation
+except ImportError:
+    variant_annotation = None
 
 
 logging.basicConfig(
@@ -331,6 +339,38 @@ if __name__ == "__main__":
     # optionally extract gene-overlapping variants from a VCF into a single VCF
     if args.vcf:
         extract_vcf_genes(args.vcf, contig2query2coords, "GENE_VARIANTS.vcf")
+
+        # annotate protein-level consequences when a reference GBFF is available
+        if args.reference_gbff and variant_annotation is not None:
+            if args.query_genes:
+                ordered_genes = variant_annotation.ordered_query_genes(
+                    args.query_genes
+                )
+            else:
+                ordered_genes = sorted(query_set)
+            # annotate from the raw VCF: variant_annotation resolves query genes
+            # against its own coding models (via the GENE INFO field when present,
+            # otherwise interval overlap), independent of the extraction step.
+            # Guarded so an annotation failure never blocks the coverage outputs
+            # written further below.
+            try:
+                report = variant_annotation.run(
+                    args.vcf,
+                    args.reference_gbff,
+                    ordered_genes,
+                    feature_type=args.feature_type,
+                    feature_qualifier=args.feature_qualifier,
+                    exact_match=args.exact_match,
+                )
+                with open("VARIANT_ANNOTATIONS.txt", "w") as out:
+                    out.write(report + "\n")
+                logger.debug(f"Wrote variant annotation report: {report}")
+            except Exception as exc:
+                logger.error(f"Variant annotation failed; continuing: {exc}")
+        elif args.reference_gbff and variant_annotation is None:
+            logger.warning(
+                "variant_annotation module unavailable; skipping variant annotation"
+            )
 
     # quantify statistics and write
     depth_dict, coverage_dict = quantify_gene_coverage(
