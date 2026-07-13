@@ -60,7 +60,10 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     gnuplot \
     python3 \
     python3-pip \
-    && apt-get autoclean && rm -rf /var/lib/apt/lists/*
+    python3-dev \
+    gcc \
+    libpq-dev && \
+    apt-get autoclean && rm -rf /var/lib/apt/lists/*
 
 # copy in samtools executables from builder stage
 COPY --from=builder /usr/local/bin/* /usr/local/bin/
