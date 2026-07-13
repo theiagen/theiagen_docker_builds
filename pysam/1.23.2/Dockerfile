@@ -74,7 +74,11 @@ ENV LC_ALL=C
 WORKDIR /data
 
 # install pysam + biopython
-RUN pip3 install pysam biopython
+RUN pip3 install \
+  pysam \
+  biopython \
+  hgvs \
+  psycopg2-binary
 
 # default command is to pull up help options
 CMD ["samtools", "--help"]
