@@ -60,9 +60,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     gnuplot \
     python3 \
     python3-pip \
-    python3-dev \
-    gcc \
-    libpq-dev && \
+    python3-dev && \
     apt-get autoclean && rm -rf /var/lib/apt/lists/*
 
 # copy in samtools executables from builder stage
@@ -77,11 +75,9 @@ ENV LC_ALL=C
 WORKDIR /data
 
 # install pysam + biopython
-RUN pip3 install \
+RUN python3 -m pip install \
   pysam \
-  biopython \
-  hgvs \
-  psycopg2-binary
+  biopython 
 
 # default command is to pull up help options
 CMD ["samtools", "--help"]
