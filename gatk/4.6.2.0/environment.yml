@@ -55,6 +55,7 @@ dependencies:
   - openjdk=17.0.18=ha668962_0
   - openssl=3.6.3=h35e630c_0
   - pcre2=10.47=haa7fec5_0
+  - picard=2.20.4=0
   - pip=26.1.2=pyh145f28c_0
   - pixman=0.46.4=h54a6638_1
   - pthread-stubs=0.4=hb9d3cd8_1002
