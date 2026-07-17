@@ -49,17 +49,25 @@ def write_json(filename: str, data: dict) -> None:
 
 
 def parse_gbff(
+    bam_references: set,
     reference_gbff: str,
     query_set: set,
     feature_type: str,
     feature_qualifier: str,
     id_check: object,
     contig2query2coords: dict,
+    ambiguous_contig: bool
 ) -> dict:
     """Parse a GBFF to obtain query coordinates"""
+
     with open(reference_gbff) as handle:
         for record in SeqIO.parse(handle, "genbank"):
-            record_id = record.name
+            record_id = record.id
+            # inefficient query check to determine BAM reference check
+            if record_id not in bam_references:
+                record_id = record.name
+                if record_id not in bam_references and not ambiguous_contig:
+                    raise KeyError(f"{record.id} and {record.name} not in BAM")
             for feature in record.features:
                 # is this the feature we want to scan?
                 if feature.type.lower() == feature_type.lower():
@@ -85,7 +93,7 @@ def parse_gbff(
 
 
 def parse_bed(
-    bedfile: str, query_set: set, id_check: object, contig2query2coords: dict
+    bam_references: set, bedfile: str, query_set: set, id_check: object, contig2query2coords: dict, ambiguous_contig: bool
 ) -> dict:
     """Parse a BED file to obtain query coordinates"""
     with open(bedfile, "r") as handle:
@@ -95,6 +103,8 @@ def parse_bed(
                 id = data[3]
                 # is this an entry we want?
                 if id_check(query_set, id):
+                    if data[0] not in bam_references and not ambiguous_contig:
+                        raise KeyError(f"{data[0]} not in BAM")
                     # BED files are 0-based coordinates
                     contig2query2coords[data[0]][id].append(
                         (int(data[1]), int(data[2]))
@@ -176,7 +186,7 @@ def extract_vcf_genes(
 
 
 def import_bam(
-    bamfile: str, contig2query2coords: dict, ambiguous_contig: bool
+    bamfile: str, ambiguous_contig: bool
 ) -> tuple:
     imported_bam = pysam.AlignmentFile(bamfile)
     # generate an index if it does not exist
@@ -185,18 +195,15 @@ def import_bam(
         pysam.index(bamfile)
         imported_bam = pysam.AlignmentFile(bamfile)
 
-    # apply coordinates to first selected contig
+    # determine if import is compatible with a single contig reference 
+    contig_names = imported_bam.references
     if ambiguous_contig:
-        contig_names = imported_bam.references
         # can't apply ambiguous contig approach if there are multiple contigs
         if len(contig_names) > 1:
             raise ValueError(
                 "can't use ambiguous_contig coordinates when there are multiple contigs in the reference"
             )
-        contig = contig_names[0]
-        # rename contig2query2coords to reflect first contig
-        contig2query2coords = {contig: v for k, v in contig2query2coords.items()}
-    return imported_bam, contig2query2coords
+    return imported_bam
 
 
 def quantify_gene_coverage(
@@ -307,26 +314,33 @@ if __name__ == "__main__":
     else:
         query_set = extract_queries_from_bed(args.bedfile)
 
+    # import BAM and modify contig coordinates if needed
+    imported_bam = import_bam(
+        args.bam, args.ambiguous_contig
+    )
+
     # {<CONTIG>: <QUERY>: [(LOC_START_1, LOC_END_1,), (LOC_START_n, LOC_END_n),]}
     contig2query2coords = defaultdict(lambda: defaultdict(list))
     if args.reference_gbff:
         contig2query2coords = parse_gbff(
+            set(imported_bam.references),
             args.reference_gbff,
             query_set,
             args.feature_type,
             args.feature_qualifier,
             id_check,
             contig2query2coords,
+            args.ambiguous_contig
         )
     if args.bedfile:
         contig2query2coords = parse_bed(
-            args.bedfile, query_set, id_check, contig2query2coords
+            set(imported_bam.references), args.bedfile, query_set, id_check, contig2query2coords, args.ambiguous_contig
         )
 
-    # import BAM and modify contig coordinates if needed
-    imported_bam, contig2query2coords = import_bam(
-        args.bam, contig2query2coords, args.ambiguous_contig
-    )
+    if args.ambiguous_contig:
+        contig = imported_bam.references[0]
+        # rename contig2query2coords to reflect first contig
+        contig2query2coords = {contig: v for k, v in contig2query2coords.items()}
 
     # optionally extract gene-overlapping variants from a VCF into a single VCF
     if args.vcf:
