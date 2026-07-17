@@ -183,6 +183,7 @@ def _match_query(query_list, identifiers, exact_match: bool):
 
 def build_gene_models(
     reference_gbff: str,
+    contig_names: set,
     query_genes,
     feature_type: str,
     feature_qualifier: str,
@@ -233,10 +234,18 @@ def build_gene_models(
                 product_vals = feature.qualifiers.get(feature_qualifier.strip())
                 product = product_vals[0] if product_vals else matched_query
                 gene_id = normalize_name(matched_query)
+
+                record_id = record.id
+                # check appropriate query is use for VCF contigs
+                if record_id not in contig_names:
+                    record_id = record.name
+                    if record_id not in contig_names:
+                        raise KeyError(f"{record.id} and {record.name} not in VCF")
+
                 model = GeneModel(
                     gene_id=gene_id,
                     product=product,
-                    contig=record.name,
+                    contig=record_id,
                     strand=strand,
                     transl_table=transl_table,
                 )
@@ -529,30 +538,19 @@ def _res(protein: str, idx: int) -> str:
     return protein[idx] if 0 <= idx < len(protein) else "X"
 
 
-def genes_for_record(record, models_by_key: dict, interval_index: dict) -> list:
+def genes_for_record(record, interval_index: dict) -> list:
     """Resolve the GeneModel(s) a record belongs to.
-
-    Prefers the VCF ``GENE`` INFO annotation; falls back to interval overlap so
-    the module also works on a raw (un-extracted) VCF."""
+    Uses interval overlap"""
     models = []
     seen = set()
-    gene_info = record.info.get("GENE") if "GENE" in record.info else None
-    if gene_info:
-        names = gene_info if isinstance(gene_info, (list, tuple)) else [gene_info]
-        for name in names:
-            model = models_by_key.get(name)
-            if model is not None and id(model) not in seen:
-                seen.add(id(model))
-                models.append(model)
-    if not models:
-        for start, end, model in interval_index.get(record.contig, []):
-            if record.start < end and record.stop > start and id(model) not in seen:
-                seen.add(id(model))
-                models.append(model)
+    for start, end, model in interval_index.get(record.contig, []):
+        if record.start < end and record.stop > start and id(model) not in seen:
+            seen.add(id(model))
+            models.append(model)
     return models
 
 
-def annotate_vcf(vcffile: str, models_by_key: dict) -> list:
+def annotate_vcf(vcf, models_by_key: dict) -> list:
     """Annotate every query-gene variant in a VCF.
 
     Returns a list of annotation dicts in VCF read order, after dropping every
@@ -566,48 +564,47 @@ def annotate_vcf(vcffile: str, models_by_key: dict) -> list:
 
     annotations = []
     read_order = 0
-    with pysam.VariantFile(vcffile) as vcf_in:
-        for record in vcf_in:
-            models = genes_for_record(record, models_by_key, interval_index)
-            if not models or not record.alts or not is_nucleotide_allele(record.ref):
+    for record in vcf:
+        models = genes_for_record(record, interval_index)
+        if not models or not record.alts or not is_nucleotide_allele(record.ref):
+            continue
+        for alt_index, alt in enumerate(record.alts):
+            # skip symbolic ('<...>'), spanning-deletion ('*') and NON-REF alleles
+            if not is_nucleotide_allele(alt):
                 continue
-            for alt_index, alt in enumerate(record.alts):
-                # skip symbolic ('<...>'), spanning-deletion ('*') and NON-REF alleles
-                if not is_nucleotide_allele(alt):
-                    continue
-                ref_depth, alt_depth = allele_depths(record, alt_index)
-                changed_pos0, ref_seg, alt_seg = normalize_indel(
-                    record.start, record.ref, alt
-                )
-                for model in models:
-                    try:
-                        if len(ref_seg) == 1 and len(alt_seg) == 1:
-                            ann = annotate_snp(model, changed_pos0, ref_seg, alt_seg)
-                        elif not ref_seg and not alt_seg:
-                            ann = None
-                        else:
-                            ann = annotate_indel(model, changed_pos0, ref_seg, alt_seg)
-                    except Exception as exc:  # never let one record abort the report
-                        logger.warning(
-                            f"Skipping {record.contig}:{record.pos} "
-                            f"{record.ref}>{alt} for {model.gene_id}: {exc}"
-                        )
+            ref_depth, alt_depth = allele_depths(record, alt_index)
+            changed_pos0, ref_seg, alt_seg = normalize_indel(
+                record.start, record.ref, alt
+            )
+            for model in models:
+                try:
+                    if len(ref_seg) == 1 and len(alt_seg) == 1:
+                        ann = annotate_snp(model, changed_pos0, ref_seg, alt_seg)
+                    elif not ref_seg and not alt_seg:
                         ann = None
-                    if ann is None:
-                        continue
-                    ann.update(
-                        {
-                            "gene_id": model.gene_id,
-                            "product": model.product,
-                            "ref_allele": record.ref,
-                            "alt_allele": alt,
-                            "ref_depth": ref_depth,
-                            "alt_depth": alt_depth,
-                            "read_order": read_order,
-                        }
+                    else:
+                        ann = annotate_indel(model, changed_pos0, ref_seg, alt_seg)
+                except Exception as exc:  # never let one record abort the report
+                    logger.warning(
+                        f"Skipping {record.contig}:{record.pos} "
+                        f"{record.ref}>{alt} for {model.gene_id}: {exc}"
                     )
-                    annotations.append(ann)
-            read_order += 1
+                    ann = None
+                if ann is None:
+                    continue
+                ann.update(
+                    {
+                        "gene_id": model.gene_id,
+                        "product": model.product,
+                        "ref_allele": record.ref,
+                        "alt_allele": alt,
+                        "ref_depth": ref_depth,
+                        "alt_depth": alt_depth,
+                        "read_order": read_order,
+                    }
+                )
+                annotations.append(ann)
+        read_order += 1
 
     return _apply_frameshift_suppression(annotations)
 
@@ -684,15 +681,19 @@ def run(
     """Annotate a VCF and return the report string"""
     query_arg = query_genes if isinstance(query_genes, (list, tuple)) else [query_genes]
     ordered = ordered_query_genes(query_arg)
+    # inefficiently reads VCF into memory
+    vcf = pysam.VariantFile(vcffile)
+    contig_names = set(vcf.header.contigs)
     models_by_key = build_gene_models(
         reference_gbff,
+        contig_names,
         ordered,
         feature_type,
         feature_qualifier,
         exact_match=exact_match,
         transl_table_override=transl_table,
     )
-    annotations = annotate_vcf(vcffile, models_by_key)
+    annotations = annotate_vcf(vcf, models_by_key)
     return format_report(annotations, ordered)
 
 
