@@ -50,23 +50,32 @@ def _write_mock_gbff(path, contig="contig1", gene="geneA", start=10, end=20):
 
 
 def test_parse_gbff_extracts_expected_coordinates(tmp_path):
+    mock_bam = MockBam(
+        references=["contig1"], contig_lengths={"contig1": 100}, default_depth=5
+    )
     gbff = tmp_path / "mock.gbff"
     _write_mock_gbff(gbff, contig="contig1", gene="geneA", start=10, end=20)
 
     contig2query2coords = defaultdict(lambda: defaultdict(list))
     parsed = gene_coverage.parse_gbff(
+        set(mock_bam.references),
         str(gbff),
         {"geneA"},
         "CDS",
         "product",
         gene_coverage.exact_check,
         contig2query2coords,
+        False
     )
 
     assert parsed["contig1"]["geneA"] == [[10, 20]]
 
 
 def test_bed_and_gbff_coordinates_agree_for_same_gene(tmp_path):
+    mock_bam = MockBam(
+        references=["contig1"], contig_lengths={"contig1": 100}, default_depth=5
+    )
+
     gbff = tmp_path / "mock.gbff"
     _write_mock_gbff(gbff, contig="contig1", gene="geneA", start=10, end=20)
 
@@ -74,18 +83,22 @@ def test_bed_and_gbff_coordinates_agree_for_same_gene(tmp_path):
     bed.write_text("contig1\t10\t20\tgeneA\n")
 
     from_gbff = gene_coverage.parse_gbff(
+        set(mock_bam.references),
         str(gbff),
         {"geneA"},
         "CDS",
         "product",
         gene_coverage.exact_check,
         defaultdict(lambda: defaultdict(list)),
+        False
     )
     from_bed = gene_coverage.parse_bed(
+        set(mock_bam.references),
         str(bed),
         {"geneA"},
         gene_coverage.exact_check,
         defaultdict(lambda: defaultdict(list)),
+        False
     )
 
     gbff_coords = [tuple(x) for x in from_gbff["contig1"]["geneA"]]
