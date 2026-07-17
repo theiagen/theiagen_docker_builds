@@ -1,11 +1,14 @@
 """Annotate the protein-level consequences of variants that overlap query genes.
 
-This module is the companion to ``gene_coverage.py``.  ``gene_coverage.py``
-extracts the variants that overlap a set of query genes into ``GENE_VARIANTS.vcf``
-(annotating each record with a ``GENE`` INFO field).  This module consumes that
-VCF, together with the reference GenBank (GBFF) that supplies the coding
-sequence, strand, product name and translation table for each gene, and reports
-the effect of every variant on the translated protein.
+This is a standalone script.  Given a VCF, a reference GenBank (GBFF) that
+supplies the coding sequence, strand, product name and translation table for
+each gene, and a set of query genes, it reports the effect of every variant on
+the translated protein.
+
+Query genes are resolved for each variant from the VCF ``GENE`` INFO field when
+one is present (for example, a VCF pre-filtered by ``gene_coverage.py``) and
+otherwise by interval overlap against the coding models built from the GBFF, so
+it works equally on a pre-extracted or a raw VCF.
 
 For each variant it determines whether a substitution is
 
