@@ -132,7 +132,7 @@ def test_gene_model_matches_biopython_extract(gbff):
                 continue
             product = feature.qualifiers["product"][0]
             models = va.build_gene_models(
-                gbff, [product], "CDS", "product", exact_match=True
+                gbff, {record.id}, [product], "CDS", "product", exact_match=True
             )
             model = models[product]
             assert model.ref_coding == str(feature.extract(record.seq)).upper()
@@ -140,7 +140,7 @@ def test_gene_model_matches_biopython_extract(gbff):
 
 def test_alpha_reference_protein(gbff):
     models = va.build_gene_models(
-        gbff, ["test gene alpha"], "CDS", "product", exact_match=True
+        gbff, {record.id for record in SeqIO.parse(gbff, "genbank")}, ["test gene alpha"], "CDS", "product", exact_match=True
     )
     assert models["test gene alpha"].ref_coding == ALPHA_CODING
     assert models["test gene alpha"].ref_protein == "MYPKGFH*"
@@ -390,7 +390,7 @@ def test_insertion_at_cds_start_preserves_start_codon(gbff):
     # inserting immediately 5' of the ATG must splice before c.1 (cds index 0),
     # keeping ATG intact and inserting Phe (TTT) rather than corrupting the frame.
     models = va.build_gene_models(
-        gbff, ["test gene alpha"], "CDS", "product", exact_match=True
+        gbff, {record.id for record in SeqIO.parse(gbff, "genbank")}, ["test gene alpha"], "CDS", "product", exact_match=True
     )
     model = models["test gene alpha"]
     ann = va.annotate_indel(model, 9, "", "TTT")  # alpha CDS starts at genomic 9
