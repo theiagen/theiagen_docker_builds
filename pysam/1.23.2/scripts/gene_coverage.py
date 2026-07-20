@@ -4,7 +4,6 @@ import pysam
 import logging
 import argparse
 from Bio import SeqIO
-from itertools import chain
 from collections import defaultdict
 
 
@@ -151,79 +150,6 @@ def parse_bed(
                         (int(data[1]), int(data[2]))
                     )
     return contig2query2coords
-
-
-def sanitize_info_value(value: str) -> str:
-    """Sanitize a string for use in a VCF INFO field (no whitespace or reserved characters)"""
-    for char in (" ", "\t", ";", "=", ","):
-        value = value.replace(char, "_")
-    return value
-
-
-def flatten_coords_by_contig(contig2query2coords: dict, full_range: bool = False) -> dict:
-    """Flatten to {<CONTIG>: [(START, END, QUERY), ...]} for interval overlap testing.
-    If full_range is True, each query is collapsed to a single (min START, max END) range
-    spanning all of its parts; otherwise every part is emitted separately"""
-    contig2ranges = defaultdict(list)
-    for contig, query2coords in contig2query2coords.items():
-        for query, loc_parts in query2coords.items():
-            if full_range:
-                # collapse all parts of a query into a single spanning range
-                all_coords = [int(coord) for coord in chain.from_iterable(loc_parts)]
-                min_coord = min(all_coords)
-                max_coord = max(all_coords)
-                contig2ranges[contig].append((min_coord, max_coord, query))
-            else:
-                for coords in loc_parts:
-                    contig2ranges[contig].append(
-                        (int(coords[0]), int(coords[1]), query)
-                    )
-    return contig2ranges
-
-
-def extract_vcf_genes(
-    vcffile: str, contig2query2coords: dict, output_vcf: str
-) -> int:
-    """Filter a VCF to variants overlapping query gene coordinates, annotating the
-    overlapping gene name(s) in a GENE INFO field. Returns the count of written records"""
-    vcf_in = pysam.VariantFile(vcffile)
-    # define the INFO field used to annotate the overlapping gene name(s)
-    if "GENE" not in vcf_in.header.info:
-        vcf_in.header.info.add(
-            "GENE",
-            ".",
-            "String",
-            "Query gene(s) whose extracted coordinate range overlaps this variant",
-        )
-    vcf_out = pysam.VariantFile(output_vcf, "w", header=vcf_in.header)
-
-    # {<CONTIG>: [(START, END, QUERY), ...]} (0-based, half-open coordinates)
-    contig2ranges = flatten_coords_by_contig(contig2query2coords)
-
-    written = 0
-    for record in vcf_in:
-        ranges = contig2ranges.get(record.contig)
-        if not ranges:
-            continue
-        # pysam VariantRecord coordinates are 0-based, half-open (record.start, record.stop)
-        genes = set(
-            gene
-            for start, end, gene in ranges
-            if record.start < end and record.stop > start
-        )
-        if genes:
-            # dedupe while preserving order and sanitize for the INFO field
-            clean_genes = sorted([
-                sanitize_info_value(gene) for gene in dict.fromkeys(genes)
-            ])
-            record.info["GENE"] = clean_genes
-            vcf_out.write(record)
-            written += 1
-
-    vcf_out.close()
-    vcf_in.close()
-    logger.debug(f"Wrote {written} gene-overlapping variant(s) to {output_vcf}")
-    return written
 
 
 def import_bam(
@@ -395,8 +321,11 @@ if __name__ == "__main__":
         # rename contig2query2coords to reflect first contig
         contig2query2coords = {contig: v for k, v in contig2query2coords.items()}
 
-    # optionally extract gene-overlapping variants from a VCF into a single VCF
+    # optionally extract gene-overlapping variants from a VCF into a single VCF;
+    # the extraction routine now lives in variant_annotation.py, which is
+    # installed alongside this script (see Dockerfile), so import it lazily here
     if args.vcf:
+        from variant_annotation import extract_vcf_genes
         extract_vcf_genes(args.vcf, contig2query2coords, "GENE_VARIANTS.vcf")
 
     # quantify statistics and write

@@ -14,13 +14,18 @@ Additional tools:
 - variant_annotation.py NA
 
 ## Changes
-Modify `gene_coverage.py` to extract gene coordinates from VCF
+Modify `gene_coverage.py` to extract gene-overlapping variants from a VCF: given
+`--vcf`, it writes `GENE_VARIANTS.vcf`, the subset of variants overlapping the
+query gene coordinates, each annotated with the overlapping gene name(s) in a
+`GENE` INFO field.
 
 Add `variant_annotation.py` to translate query genes with detected variants and
 annotate each variant's protein-level consequence (missense/synonymous/nonsense
-substitutions, in-frame insertions/deletions and frameshifts).  When
-`gene_coverage.py` is given both `--vcf` and `--reference_gbff` it now also
-writes `VARIANT_ANNOTATIONS.txt`.
+substitutions, in-frame insertions/deletions and frameshifts).  It is run
+separately from `gene_coverage.py` and takes a VCF (either a raw VCF or a
+`GENE_VARIANTS.vcf` produced by `gene_coverage.py`) together with a reference
+`--reference_gbff` (or `--reference_gff` and `--reference_fa`), writing the
+report to `VARIANT_ANNOTATIONS.txt`.
 
 ## Example Usage
 

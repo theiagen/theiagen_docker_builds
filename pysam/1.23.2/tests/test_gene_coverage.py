@@ -106,43 +106,6 @@ def test_bed_and_gbff_coordinates_agree_for_same_gene(tmp_path):
     assert gbff_coords == bed_coords == [(10, 20)]
 
 
-def _write_mock_vcf(path, contig="contig1", contig_length=100, variants=None):
-    """Write a minimal VCF; variants is a list of 1-based POS integers"""
-    variants = variants or []
-    lines = [
-        "##fileformat=VCFv4.2",
-        f"##contig=<ID={contig},length={contig_length}>",
-        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
-    ]
-    lines.extend(f"{contig}\t{pos}\t.\tA\tT\t.\t.\t." for pos in variants)
-    path.write_text("\n".join(lines) + "\n")
-
-
-def test_extract_vcf_genes_indexing_is_zero_based_half_open(tmp_path):
-    import pysam
-
-    # geneA occupies 0-based half-open [10, 20) == 1-based positions 11..20
-    vcf_in = tmp_path / "in.vcf"
-    _write_mock_vcf(
-        vcf_in, contig="contig1", contig_length=100, variants=[10, 11, 20, 21]
-    )
-    output = tmp_path / "out.vcf"
-
-    contig2query2coords = {"contig1": {"geneA": [(10, 20)]}}
-    written = gene_coverage.extract_vcf_genes(
-        str(vcf_in), contig2query2coords, str(output)
-    )
-
-    with pysam.VariantFile(str(output)) as handle:
-        assert "GENE" in handle.header.info
-        kept = [(rec.pos, tuple(rec.info["GENE"])) for rec in handle]
-
-    # POS 10 (base index 9) sits before the range; POS 21 (base index 20) sits past it.
-    # POS 11 (first base) and POS 20 (last base) fall within [10, 20).
-    assert written == 2
-    assert kept == [(11, ("geneA",)), (20, ("geneA",))]
-
-
 def test_quantify_gene_coverage_known_depth_and_breadth():
     mock_bam = MockBam(
         references=["contig1"], contig_lengths={"contig1": 100}, default_depth=5

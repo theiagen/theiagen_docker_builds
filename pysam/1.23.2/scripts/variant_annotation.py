@@ -33,6 +33,7 @@ import sys
 import logging
 import argparse
 from collections import defaultdict
+from itertools import chain
 
 import pysam
 from Bio import SeqIO
@@ -89,10 +90,76 @@ def normalize_name(name: str) -> str:
 
 
 def sanitize_info_value(value: str) -> str:
-    """Sanitize a string for use in a VCF INFO field (mirrors gene_coverage.py)"""
+    """Sanitize a string for use in a VCF INFO field (no whitespace or reserved characters)"""
     for char in (" ", "\t", ";", "=", ","):
         value = value.replace(char, "_")
     return value
+
+
+def flatten_coords_by_contig(contig2query2coords: dict, full_range: bool = False) -> dict:
+    """Flatten to {<CONTIG>: [(START, END, QUERY), ...]} for interval overlap testing.
+    If full_range is True, each query is collapsed to a single (min START, max END) range
+    spanning all of its parts; otherwise every part is emitted separately"""
+    contig2ranges = defaultdict(list)
+    for contig, query2coords in contig2query2coords.items():
+        for query, loc_parts in query2coords.items():
+            if full_range:
+                # collapse all parts of a query into a single spanning range
+                all_coords = [int(coord) for coord in chain.from_iterable(loc_parts)]
+                min_coord = min(all_coords)
+                max_coord = max(all_coords)
+                contig2ranges[contig].append((min_coord, max_coord, query))
+            else:
+                for coords in loc_parts:
+                    contig2ranges[contig].append(
+                        (int(coords[0]), int(coords[1]), query)
+                    )
+    return contig2ranges
+
+
+def extract_vcf_genes(
+    vcffile: str, contig2query2coords: dict, output_vcf: str
+) -> int:
+    """Filter a VCF to variants overlapping query gene coordinates, annotating the
+    overlapping gene name(s) in a GENE INFO field. Returns the count of written records"""
+    vcf_in = pysam.VariantFile(vcffile)
+    # define the INFO field used to annotate the overlapping gene name(s)
+    if "GENE" not in vcf_in.header.info:
+        vcf_in.header.info.add(
+            "GENE",
+            ".",
+            "String",
+            "Query gene(s) whose extracted coordinate range overlaps this variant",
+        )
+    vcf_out = pysam.VariantFile(output_vcf, "w", header=vcf_in.header)
+
+    # {<CONTIG>: [(START, END, QUERY), ...]} (0-based, half-open coordinates)
+    contig2ranges = flatten_coords_by_contig(contig2query2coords)
+
+    written = 0
+    for record in vcf_in:
+        ranges = contig2ranges.get(record.contig)
+        if not ranges:
+            continue
+        # pysam VariantRecord coordinates are 0-based, half-open (record.start, record.stop)
+        genes = set(
+            gene
+            for start, end, gene in ranges
+            if record.start < end and record.stop > start
+        )
+        if genes:
+            # dedupe while preserving order and sanitize for the INFO field
+            clean_genes = sorted([
+                sanitize_info_value(gene) for gene in dict.fromkeys(genes)
+            ])
+            record.info["GENE"] = clean_genes
+            vcf_out.write(record)
+            written += 1
+
+    vcf_out.close()
+    vcf_in.close()
+    logger.debug(f"Wrote {written} gene-overlapping variant(s) to {output_vcf}")
+    return written
 
 
 class GeneModel:
@@ -841,9 +908,11 @@ if __name__ == "__main__":
     parser.add_argument("--output", default="VARIANT_ANNOTATIONS.txt")
     args = parser.parse_args()
 
-    if not args.reference_gbff or not (args.reference_gff and args.reference_fa):
+    has_gbff = bool(args.reference_gbff)
+    has_gff_fa = bool(args.reference_gff and args.reference_fa)
+    if not (has_gbff or has_gff_fa):
         raise ValueError("--reference_gbff OR --reference_gff and --reference_fa required")
-    elif args.reference_gbff and (args.reference_gff or args.reference_fa):
+    elif has_gbff and (args.reference_gff or args.reference_fa):
         raise ValueError("--reference_gbff is mutually exclusive with --reference_gff and --reference_fa")
 
     report = run(

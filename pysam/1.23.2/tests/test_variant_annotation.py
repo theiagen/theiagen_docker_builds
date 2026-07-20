@@ -452,3 +452,44 @@ def test_delins_stop_gained_anchors_at_new_stop(gbff, tmp_path):
 )
 def test_normalize_indel(pos0, ref, alt, expected):
     assert va.normalize_indel(pos0, ref, alt) == expected
+
+
+# --------------------------------------------------------------------------- #
+# gene VCF extraction (moved from gene_coverage.py)
+# --------------------------------------------------------------------------- #
+
+def _write_mock_vcf(path, contig="contig1", contig_length=100, variants=None):
+    """Write a minimal VCF; variants is a list of 1-based POS integers"""
+    variants = variants or []
+    lines = [
+        "##fileformat=VCFv4.2",
+        f"##contig=<ID={contig},length={contig_length}>",
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+    ]
+    lines.extend(f"{contig}\t{pos}\t.\tA\tT\t.\t.\t." for pos in variants)
+    path.write_text("\n".join(lines) + "\n")
+
+
+def test_extract_vcf_genes_indexing_is_zero_based_half_open(tmp_path):
+    import pysam
+
+    # geneA occupies 0-based half-open [10, 20) == 1-based positions 11..20
+    vcf_in = tmp_path / "in.vcf"
+    _write_mock_vcf(
+        vcf_in, contig="contig1", contig_length=100, variants=[10, 11, 20, 21]
+    )
+    output = tmp_path / "out.vcf"
+
+    contig2query2coords = {"contig1": {"geneA": [(10, 20)]}}
+    written = va.extract_vcf_genes(
+        str(vcf_in), contig2query2coords, str(output)
+    )
+
+    with pysam.VariantFile(str(output)) as handle:
+        assert "GENE" in handle.header.info
+        kept = [(rec.pos, tuple(rec.info["GENE"])) for rec in handle]
+
+    # POS 10 (base index 9) sits before the range; POS 21 (base index 20) sits past it.
+    # POS 11 (first base) and POS 20 (last base) fall within [10, 20).
+    assert written == 2
+    assert kept == [(11, ("geneA",)), (20, ("geneA",))]
