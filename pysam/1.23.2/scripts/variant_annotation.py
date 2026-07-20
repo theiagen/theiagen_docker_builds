@@ -181,7 +181,7 @@ def _match_query(query_list, identifiers, exact_match: bool):
     return None
 
 
-def build_gene_models(
+def build_gene_models_gbff(
     reference_gbff: str,
     contig_names: set,
     query_genes,
@@ -268,6 +268,103 @@ def build_gene_models(
                     else:
                         models_by_key[key] = model
     return models_by_key
+
+
+def build_gene_models_gff(
+    reference_gff: str,
+    reference_fa: str,
+    contig_names: set,
+    query_genes,
+    feature_type: str,
+    feature_qualifier: str,
+    exact_match: bool = False,
+    transl_table_override: int = None,
+) -> dict:
+    """Parse a GFF and genome FA into {lookup_key: GeneModel} for every query gene.
+
+    A CDS is matched by the ``feature_qualifier`` value plus its ``gene``,
+    ``locus_tag`` and ``protein_id`` qualifiers, so query sets may mix product
+    names and locus tags.  A model is registered under many lookup keys (raw,
+    sanitized and normalized forms of every identifier) so it can be recovered
+    from whatever identifier the VCF ``GENE`` field carries."""
+    query_list = list(query_genes)
+    # this may need to be exposed to enable user-modification
+    id_qualifiers = [feature_qualifier.strip(), "gene", "locus_tag", "protein_id"]
+    models_by_key = {}
+    fa_dict = SeqIO.to_dict(SeqIO.parse(reference_fa, "fasta"))
+    with open(reference_gff) as handle:
+        for record in handle:
+            record_id, source, obs_type, start, end, score, strand, phase, attributes = record.split("\t")
+            # inefficient query check to determine BAM reference check
+
+            contig_seq = fa_dict[record_id].seq
+            if obs_type.lower() == feature_type.lower():
+                identifiers = []
+                for qualifier in id_qualifiers:
+                    qualifier_search = re.search(qualifier + r"=([^;+])[;|$]", attributes)
+                    if qualifier_search:
+                        qualifier_id = qualifier_search[0]
+                        identifiers.append(qualifier_id)
+                if not identifiers:
+                    continue
+
+                matched_query = _match_query(query_list, identifiers, exact_match)
+                if matched_query is None:
+                    continue
+
+                strand = feature.location.strand
+                if strand not in (1, -1):
+                    logger.warning(
+                        f"Skipping '{matched_query}' on {record.name}: "
+                        f"unresolved strand ({strand})"
+                    )
+                    continue
+
+                if transl_table_override is not None:
+                    transl_table = transl_table_override
+                else:
+                    transl_table = int(
+                        feature.qualifiers.get("transl_table", ["1"])[0]
+                    )
+
+                product_vals = feature.qualifiers.get(feature_qualifier.strip())
+                product = product_vals[0] if product_vals else matched_query
+                gene_id = normalize_name(matched_query)
+
+                record_id = record.id
+                # check appropriate query is use for VCF contigs
+                if record_id not in contig_names:
+                    record_id = record.name
+                    if record_id not in contig_names:
+                        raise KeyError(f"{record.id} and {record.name} not in VCF")
+
+                model = GeneModel(
+                    gene_id=gene_id,
+                    product=product,
+                    contig=record_id,
+                    strand=strand,
+                    transl_table=transl_table,
+                )
+                parts = [(int(p.start), int(p.end)) for p in feature.location.parts]
+                model.genomic_positions = _ordered_genomic_positions(parts, strand)
+                model.finalize(contig_seq)
+
+                keys = set()
+                for ident in identifiers + [matched_query, product, gene_id]:
+                    keys.update(
+                        (ident, sanitize_info_value(ident), normalize_name(ident))
+                    )
+                for key in keys:
+                    if not key:
+                        continue
+                    if key in models_by_key and models_by_key[key] is not model:
+                        logger.warning(
+                            f"'{key}' recovered multiple times; keeping first"
+                        )
+                    else:
+                        models_by_key[key] = model
+    return models_by_key
+
 
 
 def normalize_indel(pos0: int, ref: str, alt: str) -> tuple:
@@ -672,6 +769,8 @@ def ordered_query_genes(query_genes_arg) -> list:
 def run(
     vcffile: str,
     reference_gbff: str,
+    reference_gff: str,
+    reference_fa: str,
     query_genes,
     feature_type: str = "CDS",
     feature_qualifier: str = "product",
@@ -705,8 +804,15 @@ if __name__ == "__main__":
     parser.add_argument("--vcf", required=True, help="VCF of gene-overlapping variants")
     parser.add_argument(
         "--reference_gbff",
-        required=True,
-        help="reference GenBank supplying coding sequence, strand and product",
+        help="reference GenBank supplying coding sequence and coordinates",
+    )
+    parser.add_argument(
+        "--reference_gff",
+        help="reference GFF supplying coding coordinates"
+    )
+    parser.add_argument(
+        "--reference_fa",
+        help="reference genome FASTA"
     )
     parser.add_argument("--query_genes", nargs="+", required=True)
     parser.add_argument("--feature_type", default="CDS")
@@ -721,9 +827,16 @@ if __name__ == "__main__":
     parser.add_argument("--output", default="VARIANT_ANNOTATIONS.txt")
     args = parser.parse_args()
 
+    if not args.reference_gbff or not (args.reference_gff and args.reference_fa):
+        raise ValueError("--reference_gbff OR --reference_gff and --reference_fa required")
+    elif args.reference_gbff and (args.reference_gff or args.reference_fa):
+        raise ValueError("--reference_gbff is mutually exclusive with --reference_gff and --reference_fa")
+
     report = run(
         args.vcf,
         args.reference_gbff,
+        args.reference_gff,
+        args.reference_fa,
         args.query_genes,
         feature_type=args.feature_type,
         feature_qualifier=args.feature_qualifier,

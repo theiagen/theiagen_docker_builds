@@ -48,6 +48,47 @@ def write_json(filename: str, data: dict) -> None:
             f.write('{"": 0}')
 
 
+def parse_gff(
+    bam_references: set,
+    reference_gff: str,
+    query_set: set,
+    feature_type: str,
+    feature_qualifier: str,
+    id_check: object,
+    contig2query2coords: dict,
+    ambiguous_contig: bool
+) -> dict:
+    """Parse a GFF to obtain query coordinates"""
+
+    with open(reference_gff) as handle:
+        for record in handle:
+            record_id, source, obs_type, start, end, score, strand, phase, attributes = record.split("\t")
+            # inefficient query check to determine BAM reference check
+            if record_id not in bam_references and not ambiguous_contig:
+                raise KeyError(f"{record_id} not in BAM")
+            # is this the feature we want to scan?
+            if obs_type.lower() == feature_type.lower():
+                qualifier_search = re.search(feature_qualifier + r"=([^;+])[;|$]", attributes)
+                if qualifier_search:
+                    qualifier_id = qualifier_search[0]
+                    # is this a qualifying feature?
+                    if id_check(query_set, qualifier_id):
+                        if qualifier_id in contig2query2coords[record_id]:
+                            logger.warning(
+                                f"{qualifier_id} recovered multiple times in {record_id}"
+                            )
+                        # GenBanks are 1-based coordinates, though BioPython adjusts natively
+                        loc_coords = [
+                            [int(x.start), int(x.end)]
+                            for x in feature.location.parts
+                        ]
+                        contig2query2coords[record_id][qualifier_id].extend(
+                            loc_coords
+                        )
+    return contig2query2coords
+
+
+
 def parse_gbff(
     bam_references: set,
     reference_gbff: str,
@@ -288,6 +329,7 @@ if __name__ == "__main__":
     parser.add_argument("--vcf")
     parser.add_argument("--bedfile")
     parser.add_argument("--reference_gbff")
+    parser.add_argument("--reference_gff")
     parser.add_argument("--query_genes", nargs="+")
     parser.add_argument("--feature_type", default="CDS")
     parser.add_argument("--feature_qualifier", default="product")
@@ -323,6 +365,17 @@ if __name__ == "__main__":
     contig2query2coords = defaultdict(lambda: defaultdict(list))
     if args.reference_gbff:
         contig2query2coords = parse_gbff(
+            set(imported_bam.references),
+            args.reference_gbff,
+            query_set,
+            args.feature_type,
+            args.feature_qualifier,
+            id_check,
+            contig2query2coords,
+            args.ambiguous_contig
+        )
+    elif args.reference_gff:
+        contig2query2coords = parse_gff(
             set(imported_bam.references),
             args.reference_gbff,
             query_set,
