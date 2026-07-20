@@ -117,7 +117,7 @@ def gbff(tmp_path):
 
 
 def _annotate(gbff, vcf, query=("test gene alpha",), exact=True):
-    return va.run(vcf, gbff, list(query), exact_match=exact)
+    return va.run(vcf, gbff, None, None, list(query), exact_match=exact)
 
 
 # --------------------------------------------------------------------------- #
@@ -131,7 +131,7 @@ def test_gene_model_matches_biopython_extract(gbff):
             if feature.type != "CDS":
                 continue
             product = feature.qualifiers["product"][0]
-            models = va.build_gene_models(
+            models = va.build_gene_models_gbff(
                 gbff, {record.id}, [product], "CDS", "product", exact_match=True
             )
             model = models[product]
@@ -139,7 +139,7 @@ def test_gene_model_matches_biopython_extract(gbff):
 
 
 def test_alpha_reference_protein(gbff):
-    models = va.build_gene_models(
+    models = va.build_gene_models_gbff(
         gbff, {record.id for record in SeqIO.parse(gbff, "genbank")}, ["test gene alpha"], "CDS", "product", exact_match=True
     )
     assert models["test gene alpha"].ref_coding == ALPHA_CODING
@@ -285,6 +285,8 @@ def test_transl_table_override_changes_call(gbff, tmp_path):
     report = va.run(
         str(vcf),
         gbff,
+        None,
+        None,
         ["test gene alpha"],
         exact_match=True,
         transl_table=1,
@@ -332,7 +334,7 @@ def test_no_variants_message_lists_query_genes(gbff, tmp_path):
         "FKS1,lanosterol.14-alpha.demethylase,uracil.phosphoribosyltransferase",
         "B9J08_005340",
     ]
-    report = va.run(str(vcf), gbff, query, exact_match=True)
+    report = va.run(str(vcf), gbff, None, None, query, exact_match=True)
     assert report == (
         "No variants identified in queried genes "
         "(FKS1,lanosterol.14-alpha.demethylase,uracil.phosphoribosyltransferase,"
@@ -389,7 +391,7 @@ def test_reverse_strand_insertion_coding_position(gbff, tmp_path):
 def test_insertion_at_cds_start_preserves_start_codon(gbff):
     # inserting immediately 5' of the ATG must splice before c.1 (cds index 0),
     # keeping ATG intact and inserting Phe (TTT) rather than corrupting the frame.
-    models = va.build_gene_models(
+    models = va.build_gene_models_gbff(
         gbff, {record.id for record in SeqIO.parse(gbff, "genbank")}, ["test gene alpha"], "CDS", "product", exact_match=True
     )
     model = models["test gene alpha"]
@@ -418,7 +420,7 @@ def test_inframe_insertion_after_stop_is_not_stop_gained(tmp_path):
     vcf = tmp_path / "v.vcf"
     # insert TTT immediately 3' of the terminal stop (gene [5,23), last base genomic 22)
     _write_vcf(vcf, "chrgz", 30, [(23, "A", "ATTT")])
-    report = va.run(str(vcf), str(gbff), ["gz"], exact_match=True)
+    report = va.run(str(vcf), str(gbff), None, None, ["gz"], exact_match=True)
     assert "stop_gained" not in report
     assert "Xaa" not in report
     assert "stop_retained_variant" in report

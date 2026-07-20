@@ -783,15 +783,29 @@ def run(
     # inefficiently reads VCF into memory
     vcf = pysam.VariantFile(vcffile)
     contig_names = set(vcf.header.contigs)
-    models_by_key = build_gene_models(
-        reference_gbff,
-        contig_names,
-        ordered,
-        feature_type,
-        feature_qualifier,
-        exact_match=exact_match,
-        transl_table_override=transl_table,
-    )
+    if reference_gbff:
+        models_by_key = build_gene_models_gbff(
+            reference_gbff,
+            contig_names,
+            ordered,
+            feature_type,
+            feature_qualifier,
+            exact_match=exact_match,
+            transl_table_override=transl_table,
+        )
+    elif reference_gff and reference_fa:
+        models_by_key = build_gene_models_gff(
+            reference_gff,
+            reference_fa,
+            contig_names,
+            ordered,
+            feature_type,
+            feature_qualifier,
+            exact_match=exact_match,
+            transl_table_override=transl_table,
+        )
+    else:
+        raise FileNotFoundError("GBFF or GFF and FASTA not provided")
     annotations = annotate_vcf(vcf, models_by_key)
     return format_report(annotations, ordered)
 
