@@ -5,22 +5,16 @@ Main tool: [Pysam](https://github.com/pysam-developers/pysam) | [samtools](https
 Code repository: [theiagen_docker_builds](https://github.com/theiagen/theiagen_docker_builds)
 
 Additional tools:
-- biopython 1.87
-- numpy 2.2.6
 - pysam 0.24.0
-- samtools 1.23 
+- samtools 1.23
 - contaminant_check.py NA
-- gene_coverage.py NA
-- variant_annotation.py NA
 
 ## Changes
-Add `variant_annotation.py` to translate query genes with detected variants and
-annotate each variant's protein-level consequence (missense/synonymous/nonsense
-substitutions, in-frame insertions/deletions and frameshifts).  It is run
-separately from `gene_coverage.py` and takes a VCF (either a raw VCF or a
-`GENE_VARIANTS.vcf` produced by `gene_coverage.py`) together with a reference
-`--reference_gbff` (or `--reference_gff` and `--reference_fa`), writing the
-report to `VARIANT_ANNOTATIONS.txt`.
+Migrate `gene_coverage.py` and `variant_annotation.py` out of this container into
+the standalone [`theiagene`](https://github.com/theiagen/theiagene) package (which
+exposes them as `theiagene gene_coverage` and `theiagene variant_annotation`).
+`biopython` was only required by those two tools and has been dropped from this
+image.
 
 ## Example Usage
 
@@ -38,29 +32,3 @@ usage: contaminant_check.py [-h] --expected_sequences EXPECTED_SEQUENCES
                             MINIMUM_PERCENT_COVERAGE --minimum_depth MINIMUM_DEPTH
                             --minimum_reads_mapped MINIMUM_READS_MAPPED
 ```
-
-### Gene Coverage
-```
-python3 /usr/bin/gene_coverage.py -h  
-usage: gene_coverage.py [-h] --bam BAM [--bedfile BEDFILE] [--reference_gbff REFERENCE_GBFF]
-                        --query_genes QUERY_GENES [QUERY_GENES ...]
-                        [--feature_type FEATURE_TYPE]
-                        [--feature_qualifier FEATURE_QUALIFIER] [--exact_match]
-                        [--min_depth MIN_DEPTH]
-```
-
-### Variant Annotation
-```
-python3 /usr/bin/variant_annotation.py -h
-usage: variant_annotation.py [-h] --vcf VCF --reference_gbff REFERENCE_GBFF
-                             --query_genes QUERY_GENES [QUERY_GENES ...]
-                             [--feature_type FEATURE_TYPE]
-                             [--feature_qualifier FEATURE_QUALIFIER] [--exact_match]
-                             [--transl_table TRANSL_TABLE] [--output OUTPUT]
-```
-
-Example report:
-```
-lanosterol.14-alpha.demethylase: lanosterol 14-alpha demethylase (missense_variant c.395A>T p.Tyr132Phe; A:20 T:0)
-```
-
