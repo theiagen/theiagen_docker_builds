@@ -11,8 +11,7 @@ Additional tools:
 
 ## Changes
 Migrate `gene_coverage.py` and `variant_annotation.py` out of this container into
-the standalone [`theiagene`](https://github.com/theiagen/theiagene) package (which
-exposes them as `theiagene gene_coverage` and `theiagene variant_annotation`).
+the standalone [`theiagene`](https://github.com/theiagen/theiagene) package.
 `biopython` was only required by those two tools and has been dropped from this
 image.
 
