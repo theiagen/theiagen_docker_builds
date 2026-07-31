@@ -28,6 +28,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     wget \
     curl \
     unzip \
+    python3 \
+    python3-pip \
     perl \
     libperl-dev \
     cpanminus \
@@ -62,6 +64,13 @@ RUN mkdir -p /opt/vep/src && cd /opt/vep/src && \
     perl INSTALL.pl --AUTO a --NO_UPDATE --NO_TEST && \
     rm -rf /opt/vep/src/ensembl-vep/.git
 
+# clone theiagene and install it into the system python via pip, referencing the
+# cloned repo folder itself (not the PyPI package)
+RUN mkdir -p /opt/theiagene && cd /opt/theiagene && \
+    git clone https://github.com/theiagen/theiagene.git && \
+    pip install --no-cache-dir /opt/theiagene/theiagene && \
+    rm -rf /opt/theiagene/theiagene/.git
+
 # VEP executables (vep, filter_vep, haplo, variant_recoder) and the htslib binaries
 # (tabix, bgzip) that INSTALL.pl compiled into ./htslib
 ENV PATH="/opt/vep/src/ensembl-vep:/opt/vep/src/ensembl-vep/htslib:${PATH}" \
@@ -85,6 +94,10 @@ RUN vep --help && \
 
 # confirm htslib tooling compiled and is on PATH
 RUN tabix --version && bgzip --version
+
+# confirm theiagene imports and its CLI entrypoint is on PATH
+RUN python3 -c "import theiagene" && \
+    theiagene --help
 
 # confirm the Ensembl API and key Perl modules load (Bio::DB::HTS is compiled by INSTALL.pl)
 # and report the installed API version deterministically
