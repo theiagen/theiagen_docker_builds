@@ -13,6 +13,7 @@ regulatory regions.
 Additional tools:
 - htslib / tabix / bgzip (installed via `INSTALL.pl`)
 - filter_vep, haplo, variant_recoder (bundled with ensembl-vep)
+- [theiagene](https://github.com/theiagen/theiagene) NA (installed via `pip` from the cloned repo)
 
 ## What this image is
 
@@ -26,6 +27,10 @@ downloaded or mounted at runtime:
 - **Plugins** (`--AUTO p` / `--PLUGINS`)
 
 VEP itself lives in `/opt/vep/src/ensembl-vep` and is on the `PATH`.
+
+[theiagene](https://github.com/theiagen/theiagene) is cloned to `/opt/theiagene/theiagene` and
+installed into the system Python via `pip` from the repo folder itself (not the PyPI package),
+exposing the `theiagene` CLI (with subcommands such as `gene_coverage`) on the `PATH`.
 
 ## Building the image
 
@@ -76,6 +81,13 @@ Filter VEP output:
 ```bash
 docker run --rm -v $PWD:/data theiagen/ensembl-vep:116.0 \
   filter_vep --input_file /data/output.vcf --filter "IMPACT is HIGH"
+```
+
+Run the bundled `theiagene` CLI:
+
+```bash
+docker run --rm theiagen/ensembl-vep:116.0 theiagene --help
+docker run --rm theiagen/ensembl-vep:116.0 theiagene gene_coverage --help
 ```
 
 ## Notes

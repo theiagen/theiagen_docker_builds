@@ -3,6 +3,8 @@ FROM ubuntu:jammy AS app
 # for easy upgrade later. ARG variables only persist during build time.
 # VEP_VER is the git release tag (release/${VEP_VER}); it is also the software.version
 ARG VEP_VER="116.0"
+# SAMTOOLS_VER is the samtools release tag; compiled from source below
+ARG SAMTOOLS_VER="1.23"
 
 LABEL base.image="ubuntu:jammy"
 LABEL dockerfile.version="1"
@@ -41,6 +43,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     liblzma-dev \
     libcurl4-openssl-dev \
     libssl-dev \
+    libncurses-dev \
     libmodule-build-perl \
     libarchive-zip-perl \
     libdbi-perl \
@@ -64,11 +67,27 @@ RUN mkdir -p /opt/vep/src && cd /opt/vep/src && \
     perl INSTALL.pl --AUTO a --NO_UPDATE --NO_TEST && \
     rm -rf /opt/vep/src/ensembl-vep/.git
 
+# download, compile, and install samtools (bundles its own htslib in the release tarball)
+# samtools is handy for prepping VEP inputs (indexing/subsetting BAM/CRAM, faidx on reference FASTA)
+RUN cd /tmp && \
+    wget -q https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VER}/samtools-${SAMTOOLS_VER}.tar.bz2 && \
+    tar -xjf samtools-${SAMTOOLS_VER}.tar.bz2 && \
+    cd samtools-${SAMTOOLS_VER} && \
+    ./configure && \
+    make && \
+    make install && \
+    cd /tmp && rm -rf samtools-${SAMTOOLS_VER} samtools-${SAMTOOLS_VER}.tar.bz2
+
 # clone theiagene and install it into the system python via pip, referencing the
 # cloned repo folder itself (not the PyPI package)
-RUN mkdir -p /opt/theiagene && cd /opt/theiagene && \
+# jammy ships pip 22.0.2 / setuptools 59.6.0, which predate PEP 621 support and
+# silently build an empty "UNKNOWN-0.0.0" wheel from theiagene's [project] table
+# (import theiagene then fails). Upgrade pip/setuptools/wheel first so the
+# pyproject.toml metadata is read correctly.
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    mkdir -p /opt/theiagene && cd /opt/theiagene && \
     git clone https://github.com/theiagen/theiagene.git && \
-    pip install --no-cache-dir /opt/theiagene/theiagene && \
+    python3 -m pip install --no-cache-dir /opt/theiagene/theiagene && \
     rm -rf /opt/theiagene/theiagene/.git
 
 # VEP executables (vep, filter_vep, haplo, variant_recoder) and the htslib binaries
@@ -94,6 +113,9 @@ RUN vep --help && \
 
 # confirm htslib tooling compiled and is on PATH
 RUN tabix --version && bgzip --version
+
+# confirm samtools compiled and is on PATH
+RUN samtools --version
 
 # confirm theiagene imports and its CLI entrypoint is on PATH
 RUN python3 -c "import theiagene" && \
