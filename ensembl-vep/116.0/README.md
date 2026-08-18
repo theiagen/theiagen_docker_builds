@@ -15,33 +15,6 @@ Additional tools:
 - filter_vep, haplo, variant_recoder (bundled with ensembl-vep)
 - [theiagene](https://github.com/theiagen/theiagene) NA (installed via `pip` from the cloned repo)
 
-## What this image is
-
-This is a **base** image: it installs the ensembl-vep API plus Faidx/htslib pinned to the
-`release/116.0` git tag (`perl INSTALL.pl --AUTO a`). To keep the image small and generic, it
-does **not** bundle any annotation data. The following are intentionally left out and should be
-downloaded or mounted at runtime:
-
-- **Cache files** (`--AUTO c`) — the recommended annotation source for offline use
-- **FASTA files** (`--AUTO f`)
-- **Plugins** (`--AUTO p` / `--PLUGINS`)
-
-VEP itself lives in `/opt/vep/src/ensembl-vep` and is on the `PATH`.
-
-[theiagene](https://github.com/theiagen/theiagene) is cloned to `/opt/theiagene/theiagene` and
-installed into the system Python via `pip` from the repo folder itself (not the PyPI package),
-exposing the `theiagene` CLI (with subcommands such as `gene_coverage`) on the `PATH`.
-
-## Building the image
-
-```bash
-# Build the production image exactly as CI does (from repo root)
-docker build --target app -t theiagen/ensembl-vep:116.0 ./ensembl-vep/116.0
-
-# Build and run the test stage (tests run as RUN steps; a successful build == passing tests)
-docker build --target test -t ensembl-vep:test ./ensembl-vep/116.0
-```
-
 ## Example Usage
 
 Print help and confirm the install:
@@ -89,13 +62,3 @@ Run the bundled `theiagene` CLI:
 docker run --rm theiagen/ensembl-vep:116.0 theiagene --help
 docker run --rm theiagen/ensembl-vep:116.0 theiagene gene_coverage --help
 ```
-
-## Notes
-
-- Base image: `ubuntu:jammy` (Perl 5.34, which satisfies VEP's Perl >= 5.22 requirement).
-- Pinned to the upstream `release/116.0` git tag for reproducibility.
-- Bundled Perl dependencies include `DBD::mysql` (database/cache access), `Set::IntervalTree`
-  (Haplosaurus + performance), `JSON` (`--json` output), and `PerlIO::gzip` (gzipped input).
-- To also install plugins, cache, or FASTA into a derived image, re-run `INSTALL.pl` with the
-  relevant `--AUTO` letters (`c`, `f`, `p`) — see the
-  [installation docs](https://www.ensembl.org/info/docs/tools/vep/script/vep_download.html).
