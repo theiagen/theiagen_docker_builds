@@ -1,10 +1,11 @@
 FROM ubuntu:jammy AS app
 
-# for easy upgrade later. ARG variables only persist during build time.
 # VEP_VER is the git release tag (release/${VEP_VER}); it is also the software.version
 ARG VEP_VER="116.0"
 # SAMTOOLS_VER is the samtools release tag; compiled from source below
 ARG SAMTOOLS_VER="1.23"
+ARG THEIAGENE_VER="1.0.0"
+
 
 LABEL base.image="ubuntu:jammy"
 LABEL dockerfile.version="1"
@@ -56,6 +57,12 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     libtry-tiny-perl && \
     apt-get autoclean && rm -rf /var/lib/apt/lists/*
 
+# jammy ships pip 22.0.2 / setuptools 59.6.0, which predate PEP 621 support and
+# silently build an empty "UNKNOWN-0.0.0" wheel from theiagene's [project] table
+# (import theiagene then fails). Upgrade pip/setuptools/wheel first so the
+# pyproject.toml metadata is read correctly.
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
 # clone ensembl-vep, pin to the release/${VEP_VER} tag, and install the API + Faidx/htslib
 # --AUTO a : install Ensembl API and Faidx/htslib   --NO_UPDATE : do not check for updates
 # --NO_TEST : skip the API test suite (requires network access to Ensembl during build)
@@ -79,16 +86,12 @@ RUN cd /tmp && \
     cd /tmp && rm -rf samtools-${SAMTOOLS_VER} samtools-${SAMTOOLS_VER}.tar.bz2
 
 # clone theiagene and install it into the system python via pip, referencing the
-# cloned repo folder itself (not the PyPI package)
-# jammy ships pip 22.0.2 / setuptools 59.6.0, which predate PEP 621 support and
-# silently build an empty "UNKNOWN-0.0.0" wheel from theiagene's [project] table
-# (import theiagene then fails). Upgrade pip/setuptools/wheel first so the
-# pyproject.toml metadata is read correctly.
-RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    mkdir -p /opt/theiagene && cd /opt/theiagene && \
-    git clone https://github.com/theiagen/theiagene.git && \
-    python3 -m pip install --no-cache-dir /opt/theiagene/theiagene && \
-    rm -rf /opt/theiagene/theiagene/.git
+RUN cd /tmp && \
+    wget -q https://github.com/theiagen/theiagene/archive/refs/tags/v${THEIAGENE_VER}.tar.gz && \
+    tar -xzf v${THEIAGENE_VER}.tar.gz && \
+    cd theiagene-${THEIAGENE_VER} && \
+    python3 -m pip install --no-cache-dir . && \
+    cd /tmp && rm -rf theiagene-${THEIAGENE_VER} v${THEIAGENE_VER}.tar.gz
 
 # VEP executables (vep, filter_vep, haplo, variant_recoder) and the htslib binaries
 # (tabix, bgzip) that INSTALL.pl compiled into ./htslib
