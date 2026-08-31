@@ -40,4 +40,4 @@ $ python3 src/AlleleClustering.py ../tests/test.ndjson -a neighbor_joining -d ab
 
 ## Changelog
 
-- v1.0.0 copies the algorithm files from the home repository and creates the `AlleleClustering.py` interface to transform NDJSONs into a format useable for the algorithm.
+- v1.0.0 copies the algorithm files from the home repository and creates the `AlleleClustering.py` interface to transform NDJSONs into a format useable for the algorithm. It includes docstrings, returns the results from the `DistanceMatrix.from_json` result's `dmat_as_list()` function to a CSV file, and adds column and row names to the distance matrix; this file is also created when the algorithm is "minimum_spanning".
