@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir numpy==2.4.4
 
-COPY src/*.py /data
+COPY src/*.py /data/
 
 # 'CMD' instructions set a default command when the container is run. This is typically 'tool --help.'
 CMD [ "python3", "AlleleClustering.py", "--help" ]
