@@ -1,0 +1,53 @@
+[tool.poetry]
+name = "ngs-pipeline-process-allele-calling"
+version = "4.0.1"
+description = "Run the allele calling and allele filtering"
+authors = ["Vincent ROHOU <vincent.rohou@ext.biomerieux.com>"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+ngs-pipeline-lib = "^4.6.0.1"
+pysam = "^0.22.0"
+numpy = "^1.26.1"
+
+[tool.poetry.group.dev.dependencies]
+python-semantic-release = "^8.0.0"
+pytest = "^7.2.2"
+pytest-mock = "^3.10.0"
+black = "^23.1.0"
+flake8 = "^6.0.0"
+isort = "^5.12.0"
+factory-boy = "^3.2.1"
+# This is a temporary req due to https://github.com/docker/docker-py/issues/3113
+# When it's fixed in the docker lib, simply remove it and try to build a docker image
+requests = "<2.29.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.semantic_release]
+version_toml = [
+    "pyproject.toml:tool.poetry.version",
+]
+version_variables = [
+    "src/__init__.py:__version__",
+]
+commit_message = "chore(release): {version}"
+
+[tool.semantic_release.remote]
+ignore_token_for_push = true
+
+[tool.semantic_release.publish]
+upload_to_vcs_release = false
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
+
+[tool.semantic_release.branches.others]
+match = ".*"
+prerelease = true
+prerelease_token = "rc"
