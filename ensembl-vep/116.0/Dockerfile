@@ -4,8 +4,7 @@ FROM ubuntu:jammy AS app
 ARG VEP_VER="116.0"
 # SAMTOOLS_VER is the samtools release tag; compiled from source below
 ARG SAMTOOLS_VER="1.23"
-ARG THEIAGENE_VER="1.0.0"
-
+ARG THEIAGENE_VER="1.0.1"
 
 LABEL base.image="ubuntu:jammy"
 LABEL dockerfile.version="1"
@@ -85,7 +84,7 @@ RUN cd /tmp && \
     make install && \
     cd /tmp && rm -rf samtools-${SAMTOOLS_VER} samtools-${SAMTOOLS_VER}.tar.bz2
 
-# clone theiagene and install it into the system python via pip, referencing the
+# download theiagene release and install it into the system python via pip
 RUN cd /tmp && \
     wget -q https://github.com/theiagen/theiagene/archive/refs/tags/v${THEIAGENE_VER}.tar.gz && \
     tar -xzf v${THEIAGENE_VER}.tar.gz && \
