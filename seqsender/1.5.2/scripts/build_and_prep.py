@@ -363,7 +363,7 @@ def main():
     combine_passed(passed, submit_dir, args.config_file)
 
     # reads are already gzipped, so compress lightly
-    tarball = args.output_dir / "seqsender_submission.tar.gz"
+    tarball = args.output_dir / "seqsender_build_and_prep.tar.gz"
     with tarfile.open(tarball, "w:gz", compresslevel=1) as tar:
         tar.add(submit_dir, arcname="submit")
     logger.info(f"Wrote {tarball}")
