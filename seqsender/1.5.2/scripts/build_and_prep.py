@@ -43,6 +43,10 @@ def parse_args():
     parser.add_argument("--sra", action="store_true")
     parser.add_argument("--genbank", action="store_true")
 
+    # with a transfer bucket, NCBI fetches the reads from the bucket ('cloud'); without one, seqsender uploads them over FTP ('local')
+    parser.add_argument("--sra_transfer_bucket", type=str, help="Optional; NCBI-readable bucket the passing samples' reads are copied to")
+    parser.add_argument("--prep_only", action="store_true", help="Validate only; don't copy the reads to --sra_transfer_bucket")
+
     parser.add_argument("--output_dir", type=Path, default=Path.cwd(), help="Directory to write the submission files to; populates 'builds' and 'submit' directories")
     return parser.parse_args()
 
@@ -80,6 +84,10 @@ def check_inputs(args) -> list[str]:
         raise SystemExit("ERROR: --assembly_fastas is required for GenBank submission")
     if args.genbank and args.organism not in ("FLU", "COV"):
         raise SystemExit(f"ERROR: GenBank submission is only supported for FLU and COV, not {args.organism}")
+    if args.sra_transfer_bucket:
+        if not args.sra_transfer_bucket.startswith("gs://"):
+            raise SystemExit(f"ERROR: --sra_transfer_bucket must be a gs:// bucket, not {args.sra_transfer_bucket}")
+        args.sra_transfer_bucket = args.sra_transfer_bucket.rstrip("/")
 
     for name in ("assembly_fastas", "read1_fastqs", "read2_fastqs"):
         files = getattr(args, name)
@@ -170,7 +178,8 @@ def write_sample_metadata(
     sample: Sample,
     metadata_df: pd.DataFrame,
     sample_column: str,
-    genbank: bool
+    genbank: bool,
+    read_bucket: Optional[str] = None,
 ) -> None:
     """
     Creates a 'builds/<sample>/<sample>.metadata.csv' metadata file for each input `sample_id`.
@@ -187,12 +196,14 @@ def write_sample_metadata(
 
     # adds required metadata columns for SRA submissions
     if sample.reads:
-        sample_metadata_df["sra-file_location"] = "local"
-        logger.info("Setting `sra-file_location` metadata column to: 'local'")
+        location = "cloud" if read_bucket else "local"
+        sample_metadata_df["sra-file_location"] = location
+        logger.info(f"Setting `sra-file_location` metadata column to: '{location}'")
 
         for n, read in enumerate(sample.reads, start=1):
-            sample_metadata_df[f"sra-file_{n}"] = read.name
-            logger.info(f"Setting `sra-file_{n}` metadata column to: '{read.name}'")
+            read_path = f"{read_bucket}/{read.name}" if read_bucket else read.name
+            sample_metadata_df[f"sra-file_{n}"] = read_path
+            logger.info(f"Setting `sra-file_{n}` metadata column to: '{read_path}'")
 
     # adds required metadata columns AND rows for Genbank submissions
     if genbank:
@@ -222,7 +233,7 @@ def run_prep(
     sample: Sample,
     db_flags: list[str],
     organism: str,
-    config_file: Path
+    config_file: Path,
 ) -> None:
     """Runs seqsender prep on the sample's folder and records whether it passed"""
     command = [
@@ -246,7 +257,7 @@ def run_prep(
 
 def write_validation_summary(
     samples: list[Sample],
-    output_dir: Path
+    output_dir: Path,
 ) -> None:
     """Writes every sample's PASS/FAIL status and reason"""
     summary_df = pd.DataFrame({
@@ -262,27 +273,48 @@ def write_validation_summary(
     logger.info(f"{num_passed} of {len(samples)} samples passed seqsender prep")
 
 
-def combine_passed(
-    passed: list[Sample],
-    submit_dir: Path,
-    config_file: Path
+def upload_reads(
+    valid_samples: list[Sample],
+    read_bucket: str,
 ) -> None:
-    """Combines the passing samples' metadata, sequences and reads, plus the config, into 'submit/'"""
+    """Copies the passing samples' reads to the transfer bucket NCBI fetches them from"""
+    reads = [str(read) for sample in valid_samples for read in sample.reads]
+    logger.info(f"Copying {len(reads)} read files to {read_bucket}")
+
+    # FASTQs already in the `sra_transfer_bucket` with the same name are kept rather than overwritten
+    result = subprocess.run(["gcloud", "storage", "cp", "--no-clobber", *reads, f"{read_bucket}/"])
+    if result.returncode != 0:
+        raise SystemExit(f"ERROR: copying the reads to {read_bucket} failed")
+    logger.info(f"Copied {len(reads)} read files to {read_bucket}")
+
+
+def combine_passed(
+    valid_samples: list[Sample],
+    submit_dir: Path,
+    config_file: Path,
+    include_reads: bool = True,
+) -> None:
+    """
+    Combines the passing samples' metadata, sequences and reads, plus the config, into 'submit/'.
+    The reads are left out when NCBI fetches them from a transfer bucket (`include_reads=False`).
+    """
 
     logger.info("Creating final submission folder for samples that passed seqsender prep validation")
 
     raw_reads_dir = submit_dir / "raw_reads"
-    raw_reads_dir.mkdir(parents=True, exist_ok=True)
+    if include_reads:
+        raw_reads_dir.mkdir(parents=True, exist_ok=True)
 
     combined_metadata_file = submit_dir / "metadata.csv"
     combined_fasta_file = submit_dir / "sequence.fasta"
 
     all_metadata: list[pd.DataFrame] = []
     all_fastas: list[SeqRecord] = []
-    for sample in passed:
-        for read in sample.reads:
-            logger.info(f"Moving {read} to {raw_reads_dir / read.name}")
-            shutil.move(read, raw_reads_dir / read.name)
+    for sample in valid_samples:
+        if include_reads:
+            for read in sample.reads:
+                logger.info(f"Moving {read} to {raw_reads_dir / read.name}")
+                shutil.move(read, raw_reads_dir / read.name)
         all_metadata.append(pd.read_csv(sample.metadata_csv, dtype=str, keep_default_na=False))
         if sample.fasta:
             all_fastas.extend(SeqIO.parse(sample.fasta, "fasta"))
@@ -338,7 +370,8 @@ def main():
                 sample=sample,
                 metadata_df=metadata_df,
                 sample_column=sample_column,
-                genbank=args.genbank
+                genbank=args.genbank,
+                read_bucket=args.sra_transfer_bucket,
             )
         except ValueError as error:
             sample.reason = str(error)
@@ -347,7 +380,7 @@ def main():
                 sample=sample,
                 db_flags=db_flags,
                 organism=args.organism,
-                config_file=args.config_file
+                config_file=args.config_file,
             )
 
         if sample.passed:
@@ -357,12 +390,28 @@ def main():
 
     write_validation_summary(samples, args.output_dir)
 
-    # 4. combine the passing samples into submit/ and tar it for the submit task
-    passed = [sample for sample in samples if sample.passed]
-    if not passed:
+    # 4. copy valid samples to the `--sra_transfer_bucket` if appropriate. exit if no valid samples
+    valid_samples = [sample for sample in samples if sample.passed]
+    if not valid_samples:
         logger.warning("No samples passed seqsender prep; no submission tarball written")
         return
-    combine_passed(passed, submit_dir, args.config_file)
+
+    if args.sra and args.sra_transfer_bucket:
+        if args.prep_only:
+            logger.info(f"--prep_only: the reads were not copied to {args.sra_transfer_bucket}")
+        else:
+            upload_reads(
+                valid_samples=valid_samples,
+                read_bucket=args.sra_transfer_bucket,
+            )
+
+    # 5. combine the passing samples into submit/ and tar it for the submit task
+    combine_passed(
+        valid_samples=valid_samples,
+        submit_dir=submit_dir,
+        config_file=args.config_file,
+        include_reads=not args.sra_transfer_bucket,
+    )
 
     # reads are already gzipped, so compress lightly
     tarball = args.output_dir / "seqsender_build_and_prep.tar.gz"
