@@ -78,6 +78,8 @@ def check_inputs(args) -> list[str]:
         raise SystemExit("ERROR: --read1_fastqs is required for SRA submission")
     if args.genbank and not args.assembly_fastas:
         raise SystemExit("ERROR: --assembly_fastas is required for GenBank submission")
+    if args.genbank and args.organism not in ("FLU", "COV"):
+        raise SystemExit(f"ERROR: GenBank submission is only supported for FLU and COV, not {args.organism}")
 
     for name in ("assembly_fastas", "read1_fastqs", "read2_fastqs"):
         files = getattr(args, name)
