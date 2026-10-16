@@ -29,10 +29,9 @@ def setup_logging(log_file: Path) -> None:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Builds, prepares, and validates submission files for seqsender")
-    parser.add_argument("--sample_ids", nargs="+", required=True, help="Sample IDs to be submitted")
     parser.add_argument("--metadata_file", type=Path, required=True, help="Terra table TSV, named <table_name>.tsv")
-    parser.add_argument("--organism", type=str, required=True, help="seqsender organism, e.g. FLU")
     parser.add_argument("--config_file", type=Path, required=True, help="Path to the seqsender configuration file")
+    parser.add_argument("--sample_ids", nargs="+", required=True, help="Sample IDs to be submitted")
     parser.add_argument("--bioproject", type=str, help="NCBI BioProject ID to submit to")
 
     # Terra lists these in the same order as the sample IDs
@@ -40,14 +39,14 @@ def parse_args():
     parser.add_argument("--read1_fastqs", nargs="*", type=Path, default=[], help="Required for SRA; one 'read1' FASTQ per sample")
     parser.add_argument("--read2_fastqs", nargs="*", type=Path, default=[], help="Optional for SRA; leave out for single-end reads; one 'read2' FASTQ per sample")
 
+    # with a transfer bucket, NCBI fetches the reads from the bucket ('cloud'); without one, seqsender uploads them over FTP ('local')
+    parser.add_argument("--sra_transfer_bucket", type=str, help="Optional; NCBI-readable bucket the passing samples' reads are copied to")
+
+    parser.add_argument("--organism", type=str, required=True, help="seqsender organism; options include 'FLU', 'COV', or 'OTHER'")
     parser.add_argument("--biosample", action="store_true")
     parser.add_argument("--sra", action="store_true")
     parser.add_argument("--genbank", action="store_true")
-
-    # with a transfer bucket, NCBI fetches the reads from the bucket ('cloud'); without one, seqsender uploads them over FTP ('local')
-    parser.add_argument("--sra_transfer_bucket", type=str, help="Optional; NCBI-readable bucket the passing samples' reads are copied to")
     parser.add_argument("--prep_only", action="store_true", help="Validate only; don't copy the reads to --sra_transfer_bucket")
-
     parser.add_argument("--output_dir", type=Path, default=Path.cwd(), help="Directory to write the submission files to; populates 'builds' and 'submit' directories")
     return parser.parse_args()
 
