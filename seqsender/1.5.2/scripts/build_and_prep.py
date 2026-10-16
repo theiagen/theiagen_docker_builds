@@ -350,7 +350,9 @@ def main():
     logger.info(f"Preparing {len(args.sample_ids)} samples for {', '.join(flag.lstrip('-') for flag in db_flags)}")
 
     builds_dir = args.output_dir / "builds"
+    builds_dir.mkdir(parents=True, exist_ok=True)
     submit_dir = args.output_dir / "submit"
+    submit_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. stage only the files the selected databases use
     samples = stage_samples(
