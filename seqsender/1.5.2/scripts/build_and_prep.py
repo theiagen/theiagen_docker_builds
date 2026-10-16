@@ -33,6 +33,7 @@ def parse_args():
     parser.add_argument("--metadata_file", type=Path, required=True, help="Terra table TSV, named <table_name>.tsv")
     parser.add_argument("--organism", type=str, required=True, help="seqsender organism, e.g. FLU")
     parser.add_argument("--config_file", type=Path, required=True, help="Path to the seqsender configuration file")
+    parser.add_argument("--bioproject", type=str, help="NCBI BioProject ID to submit to")
 
     # Terra lists these in the same order as the sample IDs
     parser.add_argument("--assembly_fastas", nargs="*", type=Path, default=[], help="Required for GenBank; one assembly FASTA per sample")
@@ -179,6 +180,7 @@ def write_sample_metadata(
     metadata_df: pd.DataFrame,
     sample_column: str,
     genbank: bool,
+    bioproject: str,
     read_bucket: Optional[str] = None,
 ) -> None:
     """
@@ -193,6 +195,9 @@ def write_sample_metadata(
         raise ValueError(f"found {len(sample_metadata_df)} rows for this sample in the table")
 
     logger.info(f"Building metadata file: {sample.metadata_csv}")
+
+    # adds required metadata columns for ALL submissions
+    sample_metadata_df["bioproject"] = bioproject
 
     # adds required metadata columns for SRA submissions
     if sample.reads:
@@ -371,6 +376,7 @@ def main():
                 metadata_df=metadata_df,
                 sample_column=sample_column,
                 genbank=args.genbank,
+                bioproject=args.bioproject,
                 read_bucket=args.sra_transfer_bucket,
             )
         except ValueError as error:
