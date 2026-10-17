@@ -5,6 +5,7 @@ import logging
 import subprocess
 import sys
 import time
+from datetime import timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -141,7 +142,9 @@ def main():
     logger.info(f"Polling {submission_name} ({', '.join(log_df['Database'])}) every {args.poll_interval_minutes:g} minutes for up to {args.max_wait_hours:g} hours")
 
     # the first check runs immediately; seqsender also uploads GenBank once BioSample and SRA are processed
-    deadline = time.time() + args.max_wait_hours * 3600
+    start = time.time()
+    max_wait = timedelta(hours=args.max_wait_hours)
+    deadline = start + max_wait.total_seconds()
     interval = args.poll_interval_minutes * 60
     while True:
         run_submission_status(
@@ -154,7 +157,8 @@ def main():
         log_df = load_submission_log(submit_dir)
         db_statuses = get_db_status(log_df)
         main_status = get_overall_status(db_statuses)
-        logger.info(f"{' '.join(f'{db}={status}' for db, status in db_statuses.items())} -> {main_status}")
+        logger.info(f"Time elapsed:{timedelta(seconds=round(time.time() - start))} / {max_wait}")
+        logger.info(f"{' '.join(f'{db}={status}' for db, status in db_statuses.items())} -> {main_status}\n")
 
         if main_status != "PENDING" or time.time() + interval > deadline:
             break
