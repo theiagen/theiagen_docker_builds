@@ -78,6 +78,7 @@ RUN micromamba run -n seqsender seqsender.py test_network_connection | \
 RUN gcloud --version && \
   bioforklift download --help && \
   python3 -c "import pandas, Bio" && \
-  build_and_prep.py --help
+  build_and_prep.py --help && \
+  poll_and_wait.py --help
 
 RUN micromamba list -n base && micromamba list -n seqsender
