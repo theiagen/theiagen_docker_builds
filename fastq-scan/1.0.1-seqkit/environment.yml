@@ -1,0 +1,15 @@
+name: base
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - _openmp_mutex=4.5=20_gnu
+  - fastq-scan=1.0.1=h9948957_4
+  - jq=1.8.2=h280c20c_1
+  - libgcc=16.2.0=ha9f2e26_7
+  - libgomp=16.2.0=he0feb66_7
+  - libstdcxx=16.2.0=h934c35e_7
+  - oniguruma=6.9.10=hebe6cf0_1
+  - seqkit=2.14.0=hb192632_0
+
+prefix: "/opt/conda"
