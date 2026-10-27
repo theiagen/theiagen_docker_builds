@@ -32,7 +32,7 @@ options:
 
 ## Changelog
 
-- 1.3.2-helper fixes the following bugs in the 1.3.1-helper script:
+- 1.3.1-helper-1.1 fixes the following bugs in the 1.3.1-helper script:
   - The Flu B segment order swapped PB1 and PB2 (segment 1 was labeled PB2 and segment 2 was labeled PB1), so those two segments were mislabeled in the consensus FASTA filenames and headers (including the padded copies) for Type B samples. Segment 1 is now PB1 and segment 2 is PB2.
   - The unpadded multi-FASTA (`amended_consensus/<samplename>.irma.consensus.fasta`) contained padded sequences (periods replaced by Ns and dashes removed) because the padding step modified the same sequence record that was later written to the unpadded file.
   - Type A samples without an HA or NA subtype used "No subtype" as a filename suffix, so the coverage, reference, and variant files for those segments were never found and the QC summary reported `HA_No subtype` with N/A values.
