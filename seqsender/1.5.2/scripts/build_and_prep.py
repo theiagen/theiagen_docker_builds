@@ -46,7 +46,7 @@ def parse_args():
     parser.add_argument("--biosample", action="store_true")
     parser.add_argument("--sra", action="store_true")
     parser.add_argument("--genbank", action="store_true")
-    parser.add_argument("--prep_only", action="store_true", help="Validate only; don't copy the reads to --sra_transfer_bucket")
+    parser.add_argument("--validation_only", action="store_true", help="Validate only; don't copy the reads to --sra_transfer_bucket")
     parser.add_argument("--output_dir", type=Path, default=Path.cwd(), help="Directory to write the submission files to; populates 'builds' and 'submit' directories")
     return parser.parse_args()
 
@@ -405,8 +405,8 @@ def main():
         return
 
     if args.sra and args.sra_transfer_bucket:
-        if args.prep_only:
-            logger.info(f"--prep_only: the reads were not copied to {args.sra_transfer_bucket}")
+        if args.validation_only:
+            logger.info(f"--validation_only: the reads were not copied to {args.sra_transfer_bucket}")
         else:
             upload_reads(
                 valid_samples=valid_samples,
