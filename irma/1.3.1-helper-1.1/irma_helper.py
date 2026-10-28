@@ -8,7 +8,7 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 """
 A helper script to facilitate QC summary creation and FASTA concatenation.
 """
@@ -19,6 +19,7 @@ FLU_SEGMENTS: Dict[str, Dict[str, str]] = {
 "B": {"1": "PB1", "2": "PB2", "3": "PA", "4": "HA", "5": "NP", "6": "NA", "7": "MP", "8": "NS"},
 }
 
+OUTPUT_ORDER: List[str] = ["PB2", "PB1", "PA", "HA", "NP", "NA", "MP", "NS"]
 
 def setup_logger(log_file: str, verbose: bool) -> logging.Logger:
   log_level = logging.DEBUG if verbose else logging.INFO
@@ -127,7 +128,7 @@ def consensus_creation(
 
   consensus_array = []
   padded_consensus_array = []
-  concatenated_seq = ""
+  segment_seqs = {}
 
   # Create separate directory for padded_assemblies
   padded_assemblies_path = input_dir.parent / "padded_assemblies"
@@ -150,7 +151,7 @@ def consensus_creation(
       logger.debug(f"Segment header after to reformat: {record.id}")
 
 
-      concatenated_seq += str(record.seq)
+      segment_seqs[segment] = str(record.seq)
       consensus_array.append(record)
 
       # Write FASTA
@@ -174,6 +175,9 @@ def consensus_creation(
     else:
       logger.info(f"No assembly file found for segment: {segment}. IRMA likely did not produce one for this segment.")
       continue
+
+  # Concatenate segments in OUTPUT_ORDER
+  concatenated_seq = "".join(segment_seqs.get(segment, "") for segment in OUTPUT_ORDER)
 
   # Write array of consensus FASTAs
   try:
