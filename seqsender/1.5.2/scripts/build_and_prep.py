@@ -239,6 +239,7 @@ def write_sample_metadata(
     sample: Sample,
     metadata_df: pd.DataFrame,
     sample_column: str,
+    organism: str,
     biosample: bool,
     sra: bool,
     genbank: bool,
@@ -291,6 +292,12 @@ def write_sample_metadata(
             link_databases=link_databases,
             definition_line_accessions=definition_line_accessions,
         )
+
+    # GenBank submissions for flu requires explicit organism name. Fail here rather than during submission.
+    if genbank and organism == "FLU":
+        sample_organism = sample_metadata_df["organism"].iloc[0] if "organism" in sample_metadata_df else ""
+        if sample_organism.strip().lower() not in ("influenza a virus", "influenza b virus", "influenza c virus"):
+            raise ValueError(f"Organism '{sample_organism}' isn't accepted for GenBank flu submissions; Organism must be one of: 'Influenza A virus', 'Influenza B virus' or 'Influenza C virus'")
 
     # adds required metadata columns AND rows for Genbank submissions
     if genbank:
@@ -464,6 +471,7 @@ def main():
                 sample=sample,
                 metadata_df=metadata_df,
                 sample_column=sample_column,
+                organism=args.organism,
                 biosample=args.biosample,
                 sra=args.sra,
                 genbank=args.genbank,
