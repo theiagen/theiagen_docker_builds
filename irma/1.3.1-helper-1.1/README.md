@@ -13,6 +13,11 @@ A bare bones testing set has been included under `test_data/flu_test`. For this 
 ```
 python irma_helper.py -d test_data/flu_test/ -t A -s flu_test -v
 ```
+A Flu B set is included under `test_data/fluB_test`. This is IRMA 1.3.1 output from simulated paired-end reads (generated from the IRMA FLU module's B references with a few SNPs and a ~20% minor variant at B_HA position 901), so it does not represent a real sample. Only the B_HA tables and references were kept, so the resulting QC table will have coverage and variant metrics for HA only and "N/A" for the rest; read counts are populated for all segments. Segment 1 should be labeled PB1 and segment 2 PB2.
+```
+python irma_helper.py -d test_data/fluB_test/ -t B -s fluB_test -v
+```
+Note that the helper renames the files in `amended_consensus/` and creates `padded_assemblies/` next to the input directory, so run it against a copy of the test data.
 ```bash
 usage: irma_helper.py [-h] -d INPUT_DIR -t IRMA_TYPE -s SAMPLENAME [--log LOG] [-v]
 
