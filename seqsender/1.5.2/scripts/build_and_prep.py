@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+import yaml
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
@@ -174,11 +175,75 @@ def expand_metadata_per_sequence(
     return sample_metadata_df
 
 
+def check_existing_accessions(
+    df: pd.DataFrame,
+    biosample: bool,
+    sra: bool,
+    genbank: bool,
+) -> None:
+    """
+    Raises if the sample already has an accession for a selected database, since submitting it again would make a duplicate.
+    Any `genbank_accession` counts, so a flu sample with only some segments accessioned also fails.
+    """
+    columns = []
+    flags = []
+    for selected, accession_column, flag in (
+        (biosample, "biosample_accession", "submit_to_biosample"),
+        (sra, "sra_accession", "submit_to_sra"),
+        (genbank, "genbank_accession", "submit_to_genbank"),
+    ):
+        if selected and accession_column in df and df[accession_column].iloc[0]:
+            columns.append(accession_column)
+            flags.append(flag)
+    if columns:
+        raise ValueError(f"already has {', '.join(columns)}; turn off {', '.join(flags)}")
+
+
+def add_existing_accessions(
+    df: pd.DataFrame,
+    biosample: bool,
+    sra: bool,
+    link_databases: bool,
+    definition_line_accessions: bool,
+) -> None:
+    """
+    Adds the BioSample/SRA accessions from an earlier run to a GenBank submission's metadata, matching what seqsender
+    adds itself when all three databases are submitted together. Mimics seqsender's `Link_Sample_Between_NCBI_Databases` and
+    `Add_Definition_Line_Accessions` configuration options when submitting just to GenBank (with prior successful submission to BioSample and SRA).
+    Necessary for attempting to resubmit a failed Genbank submission when everything else has successfully processed.
+    """
+    if not link_databases:
+        return
+
+    tags = []
+    for selected, accession_column, modifier in (
+        (biosample, "biosample_accession", "BioSample"),
+        (sra, "sra_accession", "SRA"),
+    ):
+        accession = df[accession_column].iloc[0] if accession_column in df else ""
+        if not selected and accession:
+            df[f"src-{modifier}"] = accession
+            tags.append(f"[{modifier}={accession}]")
+            logger.info(f"Setting `src-{modifier}` metadata column to: '{accession}'")
+
+    if definition_line_accessions and tags:
+        column = "gb-fasta_definition_line_modifiers"
+        existing = df[column].iloc[0] if column in df else ""
+        # added after any modifiers already defined in the metadata table (mimics seqsender)
+        modifiers = " ".join([*existing.split(), *tags])
+        df[column] = modifiers
+        logger.info(f"Setting `{column}` metadata column to: '{modifiers}'")
+
+
 def write_sample_metadata(
     sample: Sample,
     metadata_df: pd.DataFrame,
     sample_column: str,
+    biosample: bool,
+    sra: bool,
     genbank: bool,
+    link_databases: bool,
+    definition_line_accessions: bool,
     bioproject: str,
     read_bucket: Optional[str] = None,
 ) -> None:
@@ -192,6 +257,13 @@ def write_sample_metadata(
 
     if len(sample_metadata_df) != 1:
         raise ValueError(f"found {len(sample_metadata_df)} rows for this sample in the table")
+
+    check_existing_accessions(
+        df=sample_metadata_df,
+        biosample=biosample,
+        sra=sra,
+        genbank=genbank,
+    )
 
     logger.info(f"Building metadata file: {sample.metadata_csv}")
 
@@ -209,6 +281,16 @@ def write_sample_metadata(
             read_path = f"{read_bucket}/{read.name}" if read_bucket else read.name
             sample_metadata_df[f"sra-file_{n}"] = read_path
             logger.info(f"Setting `sra-file_{n}` metadata column to: '{read_path}'")
+
+    # links a GenBank submission to the BioSample/SRA accessioned in an earlier run (if applicable)
+    if genbank:
+        add_existing_accessions(
+            df=sample_metadata_df,
+            biosample=biosample,
+            sra=sra,
+            link_databases=link_databases,
+            definition_line_accessions=definition_line_accessions,
+        )
 
     # adds required metadata columns AND rows for Genbank submissions
     if genbank:
@@ -354,6 +436,11 @@ def main():
     submit_dir = args.output_dir / "submit"
     submit_dir.mkdir(parents=True, exist_ok=True)
 
+    # check the input config file for options that will modify our metadata/assembly fasta submission files
+    ncbi_config = yaml.safe_load(args.config_file.read_text())["Submission"]["NCBI"]
+    link_databases = ncbi_config["Link_Sample_Between_NCBI_Databases"]
+    definition_line_accessions = ncbi_config.get("Add_Definition_Line_Accessions")
+
     # 1. stage only the files the selected databases use
     samples = stage_samples(
         builds_dir=builds_dir,
@@ -377,7 +464,11 @@ def main():
                 sample=sample,
                 metadata_df=metadata_df,
                 sample_column=sample_column,
+                biosample=args.biosample,
+                sra=args.sra,
                 genbank=args.genbank,
+                link_databases=link_databases,
+                definition_line_accessions=definition_line_accessions,
                 bioproject=args.bioproject,
                 read_bucket=args.sra_transfer_bucket,
             )
