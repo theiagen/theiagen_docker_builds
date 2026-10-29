@@ -521,7 +521,7 @@ def main():
     )
 
     # reads are already gzipped, so compress lightly
-    tarball = args.output_dir / "seqsender_build_and_prep.tar.gz"
+    tarball = args.output_dir / "seqsender_post_validation_checkpoint.tar.gz"
     with tarfile.open(tarball, "w:gz", compresslevel=1) as tar:
         tar.add(submit_dir, arcname="submit")
     logger.info(f"Wrote {tarball}")
