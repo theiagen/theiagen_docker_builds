@@ -1,0 +1,5 @@
+B_HA	Observations	22192
+B_HA	ExpectedErrorRate	0.00247837058399423
+B_HA	MinimumExpectedVariation	4.50612833453497e-05
+B_HA	MinimumDeletionErrorRate	0
+B_HA	MinimumInsertionErrorRate	0
