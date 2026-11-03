@@ -17,6 +17,6 @@ WORKDIR /scripts
 
 COPY irma_helper.py /scripts/irma_helper.py
 
-RUN pip install --no-cache-dir biopython pandas
+RUN pip install --no-cache-dir biopython==1.88 pandas==2.3.3
 
 RUN chmod +x /scripts/irma_helper.py
