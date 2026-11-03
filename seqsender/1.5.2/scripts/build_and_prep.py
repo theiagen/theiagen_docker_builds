@@ -18,7 +18,6 @@ from Bio.SeqRecord import SeqRecord
 
 logger = logging.getLogger("build_and_prep")
 
-
 def setup_logging(log_file: Path) -> None:
     """Logs to stdout and to log_file"""
     logging.basicConfig(
@@ -59,6 +58,7 @@ class Sample:
     sample_dir: Path  # builds/<sample_id>
     fasta: Optional[Path] = None  # builds/<sample_id>/<sample_id>.assembly.fasta
     reads: list[Path] = field(default_factory=list)  # in builds/raw_reads, read 1 first
+    metadata: Optional[pd.DataFrame] = None  # the sample's Terra row plus the columns build_and_prep fills itself
     passed: bool = False
     reason: str = ""
 
@@ -203,7 +203,6 @@ def add_existing_accessions(
     df: pd.DataFrame,
     biosample: bool,
     sra: bool,
-    link_databases: bool,
     definition_line_accessions: bool,
 ) -> None:
     """
@@ -212,9 +211,6 @@ def add_existing_accessions(
     `Add_Definition_Line_Accessions` configuration options when submitting just to GenBank (with prior successful submission to BioSample and SRA).
     Necessary for attempting to resubmit a failed Genbank submission when everything else has successfully processed.
     """
-    if not link_databases:
-        return
-
     tags = []
     for selected, accession_column, modifier in (
         (biosample, "biosample_accession", "BioSample"),
@@ -235,11 +231,10 @@ def add_existing_accessions(
         logger.info(f"Setting `{column}` metadata column to: '{modifiers}'")
 
 
-def write_sample_metadata(
+def build_sample_metadata(
     sample: Sample,
     metadata_df: pd.DataFrame,
     sample_column: str,
-    organism: str,
     biosample: bool,
     sra: bool,
     genbank: bool,
@@ -247,26 +242,13 @@ def write_sample_metadata(
     definition_line_accessions: bool,
     bioproject: str,
     read_bucket: Optional[str] = None,
-) -> None:
+) -> pd.DataFrame:
     """
-    Creates a 'builds/<sample>/<sample>.metadata.csv' metadata file for each input `sample_id`.
-    Each metadata.csv file is based on the original input Terra table (`--metadata_file`), one row per FASTA record ID (genbank only).
-    Fills in required columns for submission depending on the selected databases.
+    Returns the sample's row from the input Terra table (`--metadata_file`) with the columns build_and_prep automatically fills in itself
     """
     # sample_column is the Terra sample identifier: f"entity:{args.metadata_file.stem}_id"
     sample_metadata_df = metadata_df[metadata_df[sample_column] == sample.sample_id].copy()
-
-    if len(sample_metadata_df) != 1:
-        raise ValueError(f"found {len(sample_metadata_df)} rows for this sample in the table")
-
-    check_existing_accessions(
-        df=sample_metadata_df,
-        biosample=biosample,
-        sra=sra,
-        genbank=genbank,
-    )
-
-    logger.info(f"Building metadata file: {sample.metadata_csv}")
+    logger.info(f"Filling in metadata columns for {sample.sample_id}")
 
     # adds required metadata columns for ALL submissions
     sample_metadata_df["bioproject"] = bioproject
@@ -284,20 +266,49 @@ def write_sample_metadata(
             logger.info(f"Setting `sra-file_{n}` metadata column to: '{read_path}'")
 
     # links a GenBank submission to the BioSample/SRA accessioned in an earlier run (if applicable)
-    if genbank:
+    if genbank and link_databases:
         add_existing_accessions(
             df=sample_metadata_df,
             biosample=biosample,
             sra=sra,
-            link_databases=link_databases,
             definition_line_accessions=definition_line_accessions,
         )
+
+    return sample_metadata_df
+
+
+def write_sample_metadata(
+    sample: Sample,
+    organism: str,
+    biosample: bool,
+    sra: bool,
+    genbank: bool,
+) -> None:
+    """
+    Creates a 'builds/<sample>/<sample>.metadata.csv' metadata file from `sample.metadata`, one row per FASTA record ID (genbank only).
+    Raises ValueError if the sample can't be submitted.
+    """
+    sample_metadata_df = sample.metadata
+
+    # '<description>' text left over from metadata_template.tsv would otherwise be submitted to NCBI as the value
+    placeholder_columns = [column for column in sample_metadata_df if sample_metadata_df[column].str.fullmatch(r"<.*>").any()]
+    if placeholder_columns:
+        raise ValueError(f"fill in or clear the metadata template's '<description>' text in: {', '.join(placeholder_columns)}")
+
+    check_existing_accessions(
+        df=sample_metadata_df,
+        biosample=biosample,
+        sra=sra,
+        genbank=genbank,
+    )
 
     # GenBank submissions for flu requires explicit organism name. Fail here rather than during submission.
     if genbank and organism == "FLU":
         sample_organism = sample_metadata_df["organism"].iloc[0] if "organism" in sample_metadata_df else ""
         if sample_organism.strip().lower() not in ("influenza a virus", "influenza b virus", "influenza c virus"):
             raise ValueError(f"Organism '{sample_organism}' isn't accepted for GenBank flu submissions; Organism must be one of: 'Influenza A virus', 'Influenza B virus' or 'Influenza C virus'")
+
+    logger.info(f"Building metadata file: {sample.metadata_csv}")
 
     # adds required metadata columns AND rows for Genbank submissions
     if genbank:
@@ -307,6 +318,53 @@ def write_sample_metadata(
         )
 
     sample_metadata_df.to_csv(sample.metadata_csv, index=False)
+
+
+def write_metadata_template(
+    metadata_df: pd.DataFrame,
+    sample_column: str,
+    organism: str,
+    biosample_package: Optional[str],
+    biosample: bool,
+    sra: bool,
+    genbank: bool,
+    template_file: Path,
+) -> None:
+    """
+    Writes '<table_name>_template.tsv'. Contains the selected samples' required metadata columns to fill in and upload to the Terra table.
+    Mimics the behavior of the SeqSender submission wizard; the columns come from the schemas outlined in ('shiny/templates/'). The `metadata_df`
+    holds all existing/built sample metadata (including Terra values); empty cells hold '<column description>'.
+    """
+    templates_dir = Path(shutil.which("seqsender.py")).parent / "shiny" / "templates"
+    template_files = ["config.seqsender.seqsender.schema_template.csv"]
+    if biosample:
+        template_files.append(f"config.biosample.{biosample_package}_template.csv")
+    if sra:
+        template_files.append("config.sra.sra.schema_template.csv")
+    if genbank:
+        # genbank.schema_template.csv is left out: it only requires sequence_name and gb-sample_name, which come from the FASTA record IDs
+        template_files.append("config.genbank.genbank.flu.src.schema_template.csv" if organism == "FLU" else "config.genbank.genbank.src.schema_template.csv")
+
+    missing = [name for name in template_files if not (templates_dir / name).exists()]
+    if missing:
+        raise SystemExit(f"ERROR: seqsender has no metadata template {', '.join(missing)}; check BioSample_Package in the config file")
+
+    columns_df = pd.concat([pd.read_csv(templates_dir / name, dtype=str, keep_default_na=False) for name in template_files])
+    columns_df = columns_df[columns_df["required_column"] != "Optional"]
+    columns_df = columns_df.drop_duplicates("column_name")
+
+    # descriptions as one line of plain text (no HTML tags or quotes) so the TSV needs no quoting
+    placeholders = {
+        row.column_name: "<" + " ".join(re.sub(r"<[^>]+>", "", row.description).replace('"', "").split()) + ">"
+        for row in columns_df.itertuples()
+    }
+
+    template_df = metadata_df.reindex(columns=[sample_column, *placeholders]).fillna("")
+    for column, placeholder in placeholders.items():
+        template_df[column] = template_df[column].mask(template_df[column].str.strip() == "", placeholder)
+
+    template_df.to_csv(template_file, sep="\t", index=False)
+    logger.info(f"Wrote {len(placeholders)} required metadata columns for {len(template_df)} samples to {template_file}")
 
 
 def summarize_prep_errors(prep_log: Path) -> str:
@@ -464,21 +522,42 @@ def main():
     metadata_df = pd.read_csv(args.metadata_file, sep="\t", dtype=str, keep_default_na=False)
     sample_column = f"entity:{args.metadata_file.stem}_id"
 
-    # 3. validate each sample on its own; a sample that fails is left out of the submission
+    # 3. fill in the columns build_and_prep sets itself; the samples are checked in step 5
+    for sample in samples:
+        sample.metadata = build_sample_metadata(
+            sample=sample,
+            metadata_df=metadata_df,
+            sample_column=sample_column,
+            biosample=args.biosample,
+            sra=args.sra,
+            genbank=args.genbank,
+            link_databases=link_databases,
+            definition_line_accessions=definition_line_accessions,
+            bioproject=args.bioproject,
+            read_bucket=args.sra_transfer_bucket,
+        )
+
+    # 4. the template of required columns is written even if every sample fails validation below
+    write_metadata_template(
+        metadata_df=pd.concat([sample.metadata for sample in samples]),
+        sample_column=sample_column,
+        organism=args.organism,
+        biosample_package=ncbi_config.get("BioSample_Package"),
+        biosample=args.biosample,
+        sra=args.sra,
+        genbank=args.genbank,
+        template_file=args.output_dir / f"{args.metadata_file.stem}_template.tsv",
+    )
+
+    # 5. validate each sample on its own; a sample that fails is left out of the submission
     for sample in samples:
         try:
             write_sample_metadata(
                 sample=sample,
-                metadata_df=metadata_df,
-                sample_column=sample_column,
                 organism=args.organism,
                 biosample=args.biosample,
                 sra=args.sra,
                 genbank=args.genbank,
-                link_databases=link_databases,
-                definition_line_accessions=definition_line_accessions,
-                bioproject=args.bioproject,
-                read_bucket=args.sra_transfer_bucket,
             )
         except ValueError as error:
             sample.reason = str(error)
@@ -497,7 +576,7 @@ def main():
 
     write_validation_summary(samples, args.output_dir)
 
-    # 4. copy valid samples to the `--sra_transfer_bucket` if appropriate. exit if no valid samples
+    # 6. copy valid samples to the `--sra_transfer_bucket` if appropriate. exit if no valid samples
     valid_samples = [sample for sample in samples if sample.passed]
     if not valid_samples:
         logger.warning("No samples passed seqsender prep; no submission tarball written")
@@ -512,7 +591,7 @@ def main():
                 read_bucket=args.sra_transfer_bucket,
             )
 
-    # 5. combine the passing samples into submit/ and tar it for the submit task
+    # 7. combine the passing samples into submit/ and tar it for the submit task
     combine_passed(
         valid_samples=valid_samples,
         submit_dir=submit_dir,
