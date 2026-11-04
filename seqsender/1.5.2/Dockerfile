@@ -2,7 +2,6 @@ FROM mambaorg/micromamba:2.5.0-ubuntu24.04 AS app
 
 ARG SEQSENDER_VERSION=1.5.2
 ARG BIOFORKLIFT_VERSION=0.5.4
-ARG GCLOUD_VERSION=587.0.0
 
 # build and run as root users since micromamba image has 'mambauser' set as the $USER
 USER root
@@ -40,8 +39,8 @@ ENV LC_ALL=C.UTF-8 \
 RUN micromamba create --yes --name seqsender -f "/seqsender-${SEQSENDER_VERSION}/env.yaml" && \
   micromamba clean --all --force-pkgs-dirs --yes
 
-# base env: bioforklift (Terra table download/upload) and gcloud (copying reads into the NCBI transfer bucket)
-RUN micromamba install --yes --name base -c conda-forge python=3.12 pip biopython=1.85 google-cloud-sdk=${GCLOUD_VERSION} && \
+# base env: bioforklift (Terra table download/upload); its google-cloud-storage dependency copies reads into the NCBI transfer bucket
+RUN micromamba install --yes --name base -c conda-forge python=3.12 pip biopython=1.85 && \
   pip install --no-cache-dir bioforklift==${BIOFORKLIFT_VERSION} && \
   micromamba clean --all --force-pkgs-dirs --yes
 
@@ -74,10 +73,9 @@ RUN for org in FLU COV; \
 RUN micromamba run -n seqsender seqsender.py test_network_connection | \
   grep "No network connection issues detected" || exit 1
 
-# check gcloud, bioforklift and the helper scripts
-RUN gcloud --version && \
-  bioforklift download --help && \
-  python3 -c "import pandas, Bio" && \
+# check bioforklift, google-cloud-storage and the helper scripts
+RUN bioforklift download --help && \
+  python3 -c "import pandas, Bio; from google.cloud.storage import transfer_manager" && \
   build_and_prep.py --help && \
   poll_and_wait.py --help
 

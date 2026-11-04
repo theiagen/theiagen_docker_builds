@@ -15,6 +15,8 @@ import pandas as pd
 import yaml
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
+from google.cloud import storage
+from google.cloud.storage import transfer_manager
 
 logger = logging.getLogger("build_and_prep")
 
@@ -430,13 +432,18 @@ def upload_reads(
     read_bucket: str,
 ) -> None:
     """Copies the passing samples' reads to the transfer bucket NCBI fetches them from"""
-    reads = [str(read) for sample in valid_samples for read in sample.reads]
+    reads = [read for sample in valid_samples for read in sample.reads]
     logger.info(f"Copying {len(reads)} read files to {read_bucket}")
 
-    # FASTQs already in the `sra_transfer_bucket` with the same name are kept rather than overwritten
-    result = subprocess.run(["gcloud", "storage", "cp", "--no-clobber", *reads, f"{read_bucket}/"])
-    if result.returncode != 0:
-        raise SystemExit(f"ERROR: copying the reads to {read_bucket} failed")
+    bucket_name, _, prefix = read_bucket.removeprefix("gs://").partition("/")
+    bucket = storage.Client().bucket(bucket_name)
+    # FASTQs already in the `sra_transfer_bucket` with the same name are kept rather than overwritten;
+    # any other upload error is raised
+    transfer_manager.upload_many(
+        [(str(read), bucket.blob(f"{prefix}/{read.name}".lstrip("/"))) for read in reads],
+        skip_if_exists=True,
+        raise_exception=True,
+    )
     logger.info(f"Copied {len(reads)} read files to {read_bucket}")
 
 
