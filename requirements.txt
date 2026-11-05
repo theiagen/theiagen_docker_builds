@@ -1,0 +1,15 @@
+# Minimum versions enforced by check_dependencies.py
+# Format: <software><op><version>; names are matched across apt, pip, and conda/mamba/micromamba
+
+# brotli: CVE-2026-111497 (decoder OOB write) affects 1.0.3-1.2.0; fixed upstream in 1.2.1
+# (also backported as 1.1.1 / 1.0.10, which this single constraint will flag as failing)
+brotli>1.2.0
+brotli-python>1.2.0
+brotli-bin>1.2.0
+libbrotlicommon>1.2.0
+libbrotlidec>1.2.0
+libbrotlienc>1.2.0
+# apt packages keep the upstream version when Debian/Ubuntu backport fixes, so a version
+# check here gives false failures; uncomment only if the distro has shipped >1.2.0
+# libbrotli1>1.2.0
+# python3-brotli>1.2.0

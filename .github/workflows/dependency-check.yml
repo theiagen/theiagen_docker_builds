@@ -1,0 +1,68 @@
+name: Dependency Check
+
+# Builds changed images and enforces requirements.txt only when a PR enters the
+# merge queue. The pull_request trigger exists solely so the required check
+# reports success on the PR itself (letting it be queued) without building.
+on:
+  pull_request:
+    branches:
+      - main
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  find-new-dockerfiles:
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    outputs:
+      json: ${{ steps.files.outputs.json }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: files
+        env:
+          BASE: ${{ github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.merge_group.head_sha }}
+        run: |
+          json=$(git diff --name-only --diff-filter=AM "$BASE" "$HEAD" \
+            | { grep -E '^[^/]+/[^/]+/Dockerfile$' || true; } | jq -R . | jq -cs .)
+          echo "changed Dockerfiles: $json"
+          echo "json=$json" >> "$GITHUB_OUTPUT"
+
+  build-and-check:
+    needs: find-new-dockerfiles
+    if: needs.find-new-dockerfiles.outputs.json != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile: ${{ fromJson(needs.find-new-dockerfiles.outputs.json) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image and check dependency requirements
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+        run: |
+          dir=$(dirname "$DOCKERFILE")
+          tag="dependency-check/${dir%%/*}:${dir##*/}"
+          docker build --target app -t "$tag" "$dir"
+          python3 check_dependencies.py requirements.txt -i "$tag"
+
+  # single stable check name to require in the ruleset (matrix job names vary per Dockerfile)
+  build-check:
+    name: Build & dependency check
+    needs: [find-new-dockerfiles, build-and-check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          EVENT: ${{ github.event_name }}
+          FIND: ${{ needs.find-new-dockerfiles.result }}
+          BUILD: ${{ needs.build-and-check.result }}
+        run: |
+          echo "event: $EVENT | find-new-dockerfiles: $FIND | build-and-check: $BUILD"
+          if [ "$EVENT" = merge_group ] && [ "$FIND" != success ]; then exit 1; fi
+          case "$BUILD" in success|skipped) ;; *) exit 1 ;; esac
