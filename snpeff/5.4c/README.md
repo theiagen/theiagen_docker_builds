@@ -1,6 +1,9 @@
 # snpeff container
 
-Main tool: [snpeff](https://pcingola.github.io/SnpEff/)
+Main tool: 
+
+-  [snpeff](https://pcingola.github.io/SnpEff/)
+-  [theiagene](https://github.com/theiagene/)
 
 Full documentation: [SnpEff & SnpSift](https://pcingola.github.io/SnpEff/)
 
@@ -15,7 +18,7 @@ annotated files.
 Additional tools:
 - SnpSift 5.4c (bundled with snpEff)
 - snpEff helper scripts, e.g. `buildDbNcbi.sh` (on `PATH` from `/snpEff/scripts`)
-- [theiagene](https://github.com/theiagen/theiagene) 1.0.1 (installed via `pip` from the release tarball)
+- [theiagene](https://github.com/theiagen/theiagene) 1.1.0 (installed via `pip` from the release tarball)
 
 ## Example Usage
 

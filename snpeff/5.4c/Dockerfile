@@ -4,7 +4,7 @@ FROM ubuntu:noble AS app
 
 # SNPEFF_VER is the snpEff release; the download URL uses '_' in place of '.' (5.4c -> 5_4c)
 ARG SNPEFF_VER="5.4c"
-ARG THEIAGENE_VER="1.0.1"
+ARG THEIAGENE_VER="1.1.0"
 
 LABEL base.image="ubuntu:noble"
 LABEL dockerfile.version="1"
@@ -50,21 +50,12 @@ RUN printf '#!/bin/bash\nexec java -jar /snpEff/snpEff.jar "$@"\n' > /snpEff/snp
 
 # download theiagene release and install it into the system python via pip
 # --break-system-packages: noble's python is marked EXTERNALLY-MANAGED (PEP 668)
-# RUN cd /tmp && \
-#     wget -q https://github.com/theiagen/theiagene/archive/refs/tags/v${THEIAGENE_VER}.tar.gz && \
-#     tar -xzf v${THEIAGENE_VER}.tar.gz && \
-#     cd theiagene-${THEIAGENE_VER} && \
-#     python3 -m pip install --no-cache-dir --break-system-packages . && \
-#     cd /tmp && rm -rf theiagene-${THEIAGENE_VER} v${THEIAGENE_VER}.tar.gz
-
-# TESTING ONLY: install theiagene from a local checkout instead of the release tarball.
-# The build context must be the theiagene repo (its .dockerignore excludes .git/dist/caches):
-#   docker build -f ~/software/theiagen_docker_builds/snpeff/5.4c/Dockerfile ~/software/theiagene
-# Revert to the release-based install above (and drop this block) before merging.
-COPY . /tmp/theiagene
-RUN cd /tmp/theiagene && \
+RUN cd /tmp && \
+    wget -q https://github.com/theiagen/theiagene/archive/refs/tags/v${THEIAGENE_VER}.tar.gz && \
+    tar -xzf v${THEIAGENE_VER}.tar.gz && \
+    cd theiagene-${THEIAGENE_VER} && \
     python3 -m pip install --no-cache-dir --break-system-packages . && \
-    cd /tmp && rm -rf /tmp/theiagene
+    cd /tmp && rm -rf theiagene-${THEIAGENE_VER} v${THEIAGENE_VER}.tar.gz
 
 ENV PATH="${PATH}:/snpEff:/snpEff/scripts" \
     LC_ALL=C
