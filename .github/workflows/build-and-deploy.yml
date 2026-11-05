@@ -33,22 +33,38 @@ jobs:
     if: needs.find-new-dockerfiles.outputs.json != '[]'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         added_modified: ${{ fromJson(needs.find-new-dockerfiles.outputs.json) }}
 
     steps:
       - name: Parse file paths
         id: parse
+        env:
+          DOCKERFILE: ${{ matrix.added_modified }}
         run: |
-          echo "parsing ${{ matrix.added_modified }}"
-          tool=$(echo "${{ matrix.added_modified }}" | cut -f1 -d "/")
-          version=$(echo "${{ matrix.added_modified }}" | cut -f2 -d "/")
+          echo "parsing ${DOCKERFILE}"
+          tool=$(echo "${DOCKERFILE}" | cut -f1 -d "/")
+          version=$(echo "${DOCKERFILE}" | cut -f2 -d "/")
           echo "found tool:version ${tool}:${version}"
-          echo "tool=$tool" >> $GITHUB_OUTPUT
-          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "tool=$tool" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build --target app \
+            -t ${{ env.LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ steps.parse.outputs.tool }}:${{ steps.parse.outputs.version }} \
+            -t ${{ env.LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ steps.parse.outputs.tool }}:latest \
+            ./${{ steps.parse.outputs.tool }}/${{ steps.parse.outputs.version }}
+
+      # backstop: never push an image that fails requirements.txt, even if merged without the queue
+      - name: Check dependency requirements
+        run: |
+          python3 check_dependencies.py requirements.txt \
+            -i ${{ env.LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ steps.parse.outputs.tool }}:${{ steps.parse.outputs.version }}
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
@@ -58,13 +74,6 @@ jobs:
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.LOCATION }}-docker.pkg.dev --quiet
-
-      - name: Build Docker image
-        run: |
-          docker build --target app \
-            -t ${{ env.LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ steps.parse.outputs.tool }}:${{ steps.parse.outputs.version }} \
-            -t ${{ env.LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ steps.parse.outputs.tool }}:latest \
-            ./${{ steps.parse.outputs.tool }}/${{ steps.parse.outputs.version }}
 
       - name: Push Docker image
         run: |
