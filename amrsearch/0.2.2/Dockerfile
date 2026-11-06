@@ -6,7 +6,7 @@ ARG MAVEN_VERSION=3.9.4
 ARG AMRSEARCH_VERSION="b3fd2b90ece1aa36a3bac712801a672913966563"
 ARG USER_HOME_DIR="/root"
 ARG SHA=deaa39e16b2cf20f8cd7d232a1306344f04020e1f0fb28d35492606f647a60fe729cc40d3cba33e093a17aed41bd161fe1240556d0f1b80e773abd408686217e
-ARG BASE_URL=https://apache.osuosl.org/maven/maven-3/${MAVEN_VERSION}/binaries
+ARG BASE_URL=https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}
 
 # Metadata
 LABEL base.image="ubuntu:jammy"
@@ -66,7 +66,7 @@ RUN wget https://github.com/pathogenwatch/amr-libraries/archive/refs/tags/0.0.20
     rm -rf amr-libraries-0.0.20
 
 RUN cd amr-search-main && \
-    mkdir -p /build && mvn verify && \
+    mkdir -p /build && mvn verify -Dlicense.skipDownloadLicenses=true && \
     mkdir /paarsnp && \
     mv ./build/paarsnp.jar /paarsnp/paarsnp.jar && \
     mv ./build/databases /paarsnp && \
