@@ -4,7 +4,7 @@ FROM ubuntu:noble AS app
 
 # SNPEFF_VER is the snpEff release; the download URL uses '_' in place of '.' (5.4c -> 5_4c)
 ARG SNPEFF_VER="5.4c"
-ARG THEIAGENE_VER="1.1.0"
+ARG THEIAGENE_VER="1.1.1"
 
 LABEL base.image="ubuntu:noble"
 LABEL dockerfile.version="1"
