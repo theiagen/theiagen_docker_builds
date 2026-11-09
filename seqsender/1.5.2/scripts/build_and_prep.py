@@ -353,6 +353,8 @@ def write_metadata_template(
 
     columns_df = pd.concat([pd.read_csv(templates_dir / name, dtype=str, keep_default_na=False) for name in template_files])
     columns_df = columns_df[columns_df["required_column"] != "Optional"]
+    # build_sample_metadata fills these in from the read inputs
+    columns_df = columns_df[~columns_df["column_name"].isin(["sra-file_location", "sra-file_1"])]
     columns_df = columns_df.drop_duplicates("column_name")
 
     # descriptions as one line of plain text (no HTML tags or quotes) so the TSV needs no quoting
