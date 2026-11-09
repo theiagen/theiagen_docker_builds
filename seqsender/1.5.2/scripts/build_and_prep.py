@@ -531,6 +531,12 @@ def main():
     metadata_df = pd.read_csv(args.metadata_file, sep="\t", dtype=str, keep_default_na=False)
     sample_column = f"entity:{args.metadata_file.stem}_id"
 
+    # Excel re-saves 'YYYY-MM-DD' dates as 'M/D/YYYY', which seqsender rejects; any other value is left for seqsender prep to validate
+    if "collection_date" in metadata_df:
+        dates = pd.to_datetime(metadata_df["collection_date"], format="%m/%d/%Y", errors="coerce")
+        metadata_df.loc[dates.notna(), "collection_date"] = dates.dt.strftime("%Y-%m-%d")
+        logger.info(f"Converted {dates.notna().sum()} M/D/YYYY `collection_date` values to YYYY-MM-DD")
+
     # 3. fill in the columns build_and_prep sets itself; the samples are checked in step 5
     for sample in samples:
         sample.metadata = build_sample_metadata(
