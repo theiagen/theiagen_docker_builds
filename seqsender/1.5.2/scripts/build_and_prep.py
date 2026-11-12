@@ -305,7 +305,7 @@ def write_sample_metadata(
     )
 
     # GenBank submissions for flu requires explicit organism name. Fail here rather than during submission.
-    if genbank and organism == "FLU":
+    if genbank and seqsender_organism_tag == "FLU":
         sample_organism = sample_metadata_df["organism"].iloc[0] if "organism" in sample_metadata_df else ""
         if sample_organism.strip().lower() not in ("influenza a virus", "influenza b virus", "influenza c virus"):
             raise ValueError(f"Organism '{sample_organism}' isn't accepted for GenBank flu submissions; Organism must be one of: 'Influenza A virus', 'Influenza B virus' or 'Influenza C virus'")
