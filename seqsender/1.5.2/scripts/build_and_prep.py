@@ -44,7 +44,7 @@ def parse_args():
     # with a transfer bucket, NCBI fetches the reads from the bucket ('cloud'); without one, seqsender uploads them over FTP ('local')
     parser.add_argument("--sra_transfer_bucket", type=str, help="Optional; NCBI-readable bucket the passing samples' reads are copied to")
 
-    parser.add_argument("--organism", type=str, required=True, help="seqsender organism; options include 'FLU', 'COV', or 'OTHER'")
+    parser.add_argument("--seqsender_organism_tag", type=str, required=True, help="seqsender organism; options include 'FLU', 'COV', or 'OTHER'")
     parser.add_argument("--biosample", action="store_true")
     parser.add_argument("--sra", action="store_true")
     parser.add_argument("--genbank", action="store_true")
@@ -85,8 +85,8 @@ def check_inputs(args) -> list[str]:
         raise SystemExit("ERROR: --read1_fastqs is required for SRA submission")
     if args.genbank and not args.assembly_fastas:
         raise SystemExit("ERROR: --assembly_fastas is required for GenBank submission")
-    if args.genbank and args.organism not in ("FLU", "COV"):
-        raise SystemExit(f"ERROR: GenBank submission is only supported for FLU and COV, not {args.organism}")
+    if args.genbank and args.seqsender_organism_tag not in ("FLU", "COV"):
+        raise SystemExit(f"ERROR: GenBank submission is only supported for --seqsender_organism_tag FLU and COV, not {args.seqsender_organism_tag}")
     if args.sra_transfer_bucket:
         if not args.sra_transfer_bucket.startswith("gs://"):
             raise SystemExit(f"ERROR: --sra_transfer_bucket must be a gs:// bucket, not {args.sra_transfer_bucket}")
@@ -281,7 +281,7 @@ def build_sample_metadata(
 
 def write_sample_metadata(
     sample: Sample,
-    organism: str,
+    seqsender_organism_tag: str,
     biosample: bool,
     sra: bool,
     genbank: bool,
@@ -325,7 +325,7 @@ def write_sample_metadata(
 def write_metadata_template(
     metadata_df: pd.DataFrame,
     sample_column: str,
-    organism: str,
+    seqsender_organism_tag: str,
     biosample_package: Optional[str],
     biosample: bool,
     sra: bool,
@@ -345,7 +345,7 @@ def write_metadata_template(
         template_files.append("config.sra.sra.schema_template.csv")
     if genbank:
         # genbank.schema_template.csv is left out: it only requires sequence_name and gb-sample_name, which come from the FASTA record IDs
-        template_files.append("config.genbank.genbank.flu.src.schema_template.csv" if organism == "FLU" else "config.genbank.genbank.src.schema_template.csv")
+        template_files.append("config.genbank.genbank.flu.src.schema_template.csv" if seqsender_organism_tag == "FLU" else "config.genbank.genbank.src.schema_template.csv")
 
     missing = [name for name in template_files if not (templates_dir / name).exists()]
     if missing:
@@ -388,13 +388,13 @@ def summarize_prep_errors(prep_log: Path) -> str:
 def run_prep(
     sample: Sample,
     db_flags: list[str],
-    organism: str,
+    seqsender_organism_tag: str,
     config_file: Path,
 ) -> None:
     """Runs seqsender prep on the sample's folder and records whether it passed"""
     command = [
         "micromamba", "run", "-n", "seqsender", "seqsender.py", "prep", *db_flags,
-        "--organism", organism,
+        "--organism", seqsender_organism_tag,
         "--submission_dir", str(sample.sample_dir.parent),
         "--submission_name", sample.sample_id,
         "--config_file", str(config_file),
@@ -556,7 +556,7 @@ def main():
     write_metadata_template(
         metadata_df=pd.concat([sample.metadata for sample in samples]),
         sample_column=sample_column,
-        organism=args.organism,
+        seqsender_organism_tag=args.seqsender_organism_tag,
         biosample_package=ncbi_config.get("BioSample_Package"),
         biosample=args.biosample,
         sra=args.sra,
@@ -569,7 +569,7 @@ def main():
         try:
             write_sample_metadata(
                 sample=sample,
-                organism=args.organism,
+                seqsender_organism_tag=args.seqsender_organism_tag,
                 biosample=args.biosample,
                 sra=args.sra,
                 genbank=args.genbank,
@@ -580,7 +580,7 @@ def main():
             run_prep(
                 sample=sample,
                 db_flags=db_flags,
-                organism=args.organism,
+                seqsender_organism_tag=args.seqsender_organism_tag,
                 config_file=args.config_file,
             )
 
