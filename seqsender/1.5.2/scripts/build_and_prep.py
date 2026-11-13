@@ -2,12 +2,11 @@
 
 import argparse
 import logging
-import tarfile
 from pathlib import Path
 
 import pandas as pd
 
-from seqsender_ops.files import combine_passed, stage_samples, upload_reads
+from seqsender_ops.files import combine_passed, stage_samples, upload_reads, write_tarball
 from seqsender_ops.logging_config import setup_logging
 from seqsender_ops.metadata import build_sample_metadata, write_sample_metadata
 from seqsender_ops.models import DATABASES, BuildOptions, SampleError
@@ -168,11 +167,10 @@ def main():
         include_reads=not options.sra_transfer_bucket,
     )
 
-    # reads are already gzipped, so compress lightly
-    tarball = args.output_dir / "seqsender_post_validation_checkpoint.tar.gz"
-    with tarfile.open(tarball, "w:gz", compresslevel=1) as tar:
-        tar.add(submit_dir, arcname="submit")
-    logger.info(f"Wrote {tarball}")
+    write_tarball(
+        submit_dir=submit_dir,
+        tarball=args.output_dir / "seqsender_post_validation_checkpoint.tar.gz",
+    )
 
 
 if __name__ == "__main__":

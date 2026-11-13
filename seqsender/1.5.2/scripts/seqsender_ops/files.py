@@ -1,5 +1,6 @@
 import logging
 import shutil
+import tarfile
 from pathlib import Path
 
 import pandas as pd
@@ -127,3 +128,14 @@ def combine_passed(
 
     logger.info(f"Copying {config_file} to {submit_dir / 'config.yaml'}")
     shutil.copy(config_file, submit_dir / "config.yaml")
+
+
+def write_tarball(
+    submit_dir: Path,
+    tarball: Path,
+) -> None:
+    """Tars 'submit/' for the seqsender_submit task"""
+    # reads are already gzipped, so compress lightly
+    with tarfile.open(tarball, "w:gz", compresslevel=1) as tar:
+        tar.add(submit_dir, arcname="submit")
+    logger.info(f"Wrote {tarball}")
