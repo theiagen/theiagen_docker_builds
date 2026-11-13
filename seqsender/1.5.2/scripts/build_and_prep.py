@@ -35,7 +35,7 @@ logger = logging.getLogger("build_and_prep")
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Builds, prepares, and validates submission files for seqsender")
-    parser.add_argument("--metadata_file", type=Path, required=True, help="Terra table TSV, named <table_name>.tsv")
+    parser.add_argument("--metadata_file", type=Path, required=True, help="Terra table TSV; its first column, 'entity:<table_name>_id', holds the sample IDs")
     parser.add_argument("--config_file", type=Path, required=True, help="Path to the seqsender configuration file")
     parser.add_argument("--sample_ids", nargs="+", required=True, help="Sample IDs to be submitted")
     parser.add_argument("--bioproject", type=str, required=True, help="NCBI BioProject ID to submit to")
@@ -70,6 +70,11 @@ def check_inputs(args) -> None:
     if args.sra_transfer_bucket and not args.sra_transfer_bucket.startswith("gs://"):
         raise SystemExit(f"ERROR: --sra_transfer_bucket must be a gs:// bucket, not {args.sra_transfer_bucket}")
 
+    # Terra won't allow duplicate samples to exist in the same table; just adding as a precaution
+    duplicate_ids = sorted({sample_id for sample_id in args.sample_ids if args.sample_ids.count(sample_id) > 1})
+    if duplicate_ids:
+        raise SystemExit(f"ERROR: --sample_ids must be unique; repeated: {', '.join(duplicate_ids)}")
+
     for name in ("assembly_fastas", "read1_fastqs", "read2_fastqs"):
         files = getattr(args, name)
         if files and len(files) != len(args.sample_ids):
@@ -81,6 +86,28 @@ def check_inputs(args) -> None:
         duplicates = sorted({name for name in names if names.count(name) > 1})
         if duplicates:
             raise SystemExit(f"ERROR: read files must have unique names; repeated: {', '.join(duplicates)}")
+
+
+def check_metadata_table(
+    metadata_df: pd.DataFrame,
+    sample_column: str,
+    sample_ids: list[str],
+) -> None:
+    """
+    Exits unless `sample_column` is an 'entity:<table_name>_id' column with exactly one row for each sample ID.
+    A Terra table always has this column first and can't have a row without a sample ID, so these checks are only a precaution.
+    """
+    if not sample_column.startswith("entity:"):
+        raise SystemExit(f"ERROR: the metadata table's first column must be 'entity:<table_name>_id', not '{sample_column}'")
+
+    table_ids = metadata_df[sample_column].tolist()
+    missing = [sample_id for sample_id in sample_ids if sample_id not in table_ids]
+    if missing:
+        raise SystemExit(f"ERROR: sample_ids not in the metadata table: {', '.join(missing)}")
+
+    repeated = [sample_id for sample_id in sample_ids if table_ids.count(sample_id) > 1]
+    if repeated:
+        raise SystemExit(f"ERROR: sample_ids with more than one row in the metadata table: {', '.join(repeated)}")
 
 
 def main():
@@ -103,9 +130,14 @@ def main():
         read2_fastqs=args.read2_fastqs if options.sra else [],
     )
 
-    # 2. the Terra table is the base of each sample's metadata.csv; entity:{table_name}_id holds the sample IDs
+    # 2. the Terra table is the base of each sample's metadata.csv; first column should be 'entity:<table_name>_id' and hold all sample IDs
     metadata_df = pd.read_csv(args.metadata_file, sep="\t", dtype=str, keep_default_na=False)
-    sample_column = f"entity:{args.metadata_file.stem}_id"
+    sample_column = metadata_df.columns[0]  # e.g. 'entity:<table_name>_id'
+    check_metadata_table(
+        metadata_df=metadata_df,
+        sample_column=sample_column,
+        sample_ids=args.sample_ids,
+    )
 
     # 3. fill in the columns build_and_prep sets itself; the samples are checked in step 5
     for sample in samples:
@@ -117,11 +149,12 @@ def main():
         )
 
     # 4. the template of required columns is written even if every sample fails validation below
+    table_name = sample_column.removeprefix("entity:").removesuffix("_id")
     write_metadata_template(
         metadata_df=pd.concat([sample.metadata for sample in samples]),
         sample_column=sample_column,
         options=options,
-        template_file=args.output_dir / f"{args.metadata_file.stem}_template.tsv",
+        template_file=args.output_dir / f"{table_name}_template.tsv",
     )
 
     # 5. validate each sample on its own; a sample that fails is left out of the submission
