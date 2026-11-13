@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import sys
 import tarfile
 from pathlib import Path
 
@@ -10,19 +9,12 @@ import pandas as pd
 import yaml
 
 from seqsender_ops.files import combine_passed, stage_samples, upload_reads
+from seqsender_ops.logging_config import setup_logging
 from seqsender_ops.metadata import build_sample_metadata, write_sample_metadata
 from seqsender_ops.models import DATABASES
 from seqsender_ops.validation import run_prep, write_metadata_template, write_validation_summary
 
 logger = logging.getLogger("build_and_prep")
-
-def setup_logging(log_file: Path) -> None:
-    """Logs to stdout and to log_file"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(log_file, mode="w")],
-    )
 
 
 def parse_args():

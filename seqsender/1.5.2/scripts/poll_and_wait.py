@@ -3,27 +3,19 @@
 import argparse
 import logging
 import subprocess
-import sys
 import time
 from datetime import timedelta
 from pathlib import Path
 
 import pandas as pd
 
+from seqsender_ops.logging_config import setup_logging
 from seqsender_ops.models import DATABASES
 
 logger = logging.getLogger("poll_and_wait")
 
 # DELETED: NCBI removed the submission, e.g. it stayed in error too long
 ERROR_STATUSES = {"ERROR", "FAILED", "DELETED"}
-
-def setup_logging(log_file: Path) -> None:
-    """Logs to stdout and to log_file"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(log_file, mode="a")],
-    )
 
 
 def parse_args():
@@ -119,7 +111,7 @@ def missing_accessions(status_report: Path) -> dict[str, list[str]]:
 def main():
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    setup_logging(args.output_dir / "seqsender_poll_and_wait.log")
+    setup_logging(args.output_dir / "seqsender_poll_and_wait.log", mode="a")
 
     submit_dir = args.submit_dir.absolute()
     if not (submit_dir / "submission_log.csv").is_file():
