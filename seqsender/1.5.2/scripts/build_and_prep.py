@@ -14,6 +14,7 @@ from seqsender_ops.files import (
 )
 from seqsender_ops.metadata import (
     build_sample_metadata,
+    write_metadata_template,
     write_sample_metadata,
 )
 from seqsender_ops.models import (
@@ -24,7 +25,6 @@ from seqsender_ops.models import (
 from seqsender_ops.validation import (
     run_prep,
     validate_sample_metadata,
-    write_metadata_template,
     write_validation_summary,
 )
 from seqsender_ops.logging_config import setup_logging

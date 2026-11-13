@@ -1,4 +1,6 @@
 import logging
+import re
+import shutil
 from pathlib import Path
 
 import pandas as pd
@@ -15,6 +17,17 @@ def get_value(
 ) -> str:
     """Returns the sample's value in `column`, or '' if the column isn't in its metadata"""
     return df[column].iloc[0] if column in df else ""
+
+
+def flu_genbank_required_columns(organism: str) -> list[str]:
+    """
+    Returns the columns NCBI requires for a GenBank flu submission of `organism`, even though seqsender lists them as optional:
+    `src-Isolation-source` for every flu sample, plus `src-Serotype` for Influenza A.
+    see (https://github.com/ncbi/submission-schema/blob/master/genbank/influenza/Influenza-ProgrammaticHelp.pdf)
+    """
+    if organism.strip().lower() == "influenza a virus":
+        return ["src-Isolation-source", "src-Serotype"]
+    return ["src-Isolation-source"]
 
 
 def expand_metadata_per_sequence(
@@ -145,3 +158,57 @@ def write_sample_metadata(
         )
 
     sample_metadata_df.to_csv(sample.metadata_csv, index=False)
+
+
+def write_metadata_template(
+    metadata_df: pd.DataFrame,
+    sample_column: str,
+    options: BuildOptions,
+    template_file: Path,
+) -> None:
+    """
+    Writes '<table_name>_template.tsv'. Contains the selected samples' required metadata columns to fill in and upload to the Terra table.
+    Mimics the behavior of the SeqSender submission wizard; the columns come from the schemas outlined in ('shiny/templates/'). The `metadata_df`
+    holds all existing/built sample metadata (including Terra values); empty cells hold '<column description>'.
+    """
+    templates_dir = Path(shutil.which("seqsender.py")).parent / "shiny" / "templates"
+    template_files = ["config.seqsender.seqsender.schema_template.csv"]
+    if options.biosample:
+        template_files.append(f"config.biosample.{options.biosample_package}_template.csv")
+    if options.sra:
+        template_files.append("config.sra.sra.schema_template.csv")
+    if options.genbank:
+        # genbank.schema_template.csv is left out: it only requires sequence_name and gb-sample_name, which come from the FASTA record IDs
+        template_files.append("config.genbank.genbank.flu.src.schema_template.csv" if options.seqsender_organism_tag == "FLU" else "config.genbank.genbank.src.schema_template.csv")
+
+    missing = [name for name in template_files if not (templates_dir / name).exists()]
+    if missing:
+        raise SystemExit(f"ERROR: seqsender has no metadata template {', '.join(missing)}; check BioSample_Package in the config file")
+
+    columns_df = pd.concat([pd.read_csv(templates_dir / name, dtype=str, keep_default_na=False) for name in template_files])
+
+    # NCBI requires these for flu submissions to GenBank, even though seqsender lists them as optional (see `flu_genbank_required_columns`)
+    if options.genbank and options.seqsender_organism_tag == "FLU":
+        flu_required_columns = set()
+        # without an `organism` column, only the columns every flu sample needs
+        for organism in metadata_df.get("organism", [""]):
+            flu_required_columns.update(flu_genbank_required_columns(organism))
+        columns_df.loc[columns_df["column_name"].isin(flu_required_columns), "required_column"] = "Required"
+
+    columns_df = columns_df[columns_df["required_column"] != "Optional"]
+    # build_sample_metadata fills these in from the read inputs
+    columns_df = columns_df[~columns_df["column_name"].isin(["sra-file_location", "sra-file_1"])]
+    columns_df = columns_df.drop_duplicates("column_name")
+
+    # descriptions as one line of plain text (no HTML tags or quotes) so the TSV needs no quoting
+    placeholders = {
+        row.column_name: "<" + " ".join(re.sub(r"<[^>]+>", "", row.description).replace('"', "").split()) + ">"
+        for row in columns_df.itertuples()
+    }
+
+    template_df = metadata_df.reindex(columns=[sample_column, *placeholders]).fillna("")
+    for column, placeholder in placeholders.items():
+        template_df[column] = template_df[column].mask(template_df[column].str.strip() == "", placeholder)
+
+    template_df.to_csv(template_file, sep="\t", index=False)
+    logger.info(f"Wrote {len(placeholders)} required metadata columns for {len(template_df)} samples to {template_file}")

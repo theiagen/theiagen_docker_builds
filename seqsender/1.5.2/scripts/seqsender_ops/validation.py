@@ -1,15 +1,23 @@
 import logging
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
 import pandas as pd
 
-from .metadata import get_value
+from .metadata import flu_genbank_required_columns, get_value
 from .models import BuildOptions, Sample, SampleError
 
 logger = logging.getLogger(__name__)
+
+
+def check_placeholders(
+    df: pd.DataFrame,
+) -> None:
+    """Raises if '<description>' text from the metadata template is left in a column, since it would be submitted to NCBI as the value"""
+    placeholder_columns = [column for column in df if df[column].str.fullmatch(r"<.*>").any()]
+    if placeholder_columns:
+        raise SampleError(f"fill in or clear the metadata template's '<description>' text in: {', '.join(placeholder_columns)}")
 
 
 def check_existing_accessions(
@@ -29,6 +37,22 @@ def check_existing_accessions(
         )
 
 
+def check_flu_genbank(
+    df: pd.DataFrame,
+) -> None:
+    """
+    Raises if a GenBank flu sample is missing what NCBI requires and `seqsender prep` doesn't check:
+    an accepted organism name and the columns from `flu_genbank_required_columns`
+    """
+    sample_organism = get_value(df, "organism")
+    if sample_organism.strip().lower() not in ("influenza a virus", "influenza b virus", "influenza c virus"):
+        raise SampleError(f"Organism '{sample_organism}' isn't accepted for GenBank flu submissions; Organism must be one of: 'Influenza A virus', 'Influenza B virus' or 'Influenza C virus'")
+
+    missing_flu_columns = [column for column in flu_genbank_required_columns(sample_organism) if not get_value(df, column).strip()]
+    if missing_flu_columns:
+        raise SampleError(f"NCBI requires {', '.join(missing_flu_columns)} for '{sample_organism}' submissions to GenBank")
+
+
 def validate_sample_metadata(
     sample_metadata_df: pd.DataFrame,
     options: BuildOptions,
@@ -37,88 +61,17 @@ def validate_sample_metadata(
     Checks the sample's metadata for problems `seqsender prep` doesn't catch, so they fail here rather than during submission.
     Raises SampleError if the sample can't be submitted.
     """
-    # '<description>' text left over from metadata_template.tsv would otherwise be submitted to NCBI as the value
-    placeholder_columns = [column for column in sample_metadata_df if sample_metadata_df[column].str.fullmatch(r"<.*>").any()]
-    if placeholder_columns:
-        raise SampleError(f"fill in or clear the metadata template's '<description>' text in: {', '.join(placeholder_columns)}")
-
+    check_placeholders(
+        df=sample_metadata_df,
+    )
     check_existing_accessions(
         df=sample_metadata_df,
         options=options,
     )
-
-    # NCBI specific metadata requirements for GenBank FLU submissions; fail here rather than during submission
-    # see (https://github.com/ncbi/submission-schema/blob/master/genbank/influenza/Influenza-ProgrammaticHelp.pdf)
     if options.genbank and options.seqsender_organism_tag == "FLU":
-        # all flu submissions require an explicit organism name
-        sample_organism = get_value(sample_metadata_df, "organism")
-        if sample_organism.strip().lower() not in ("influenza a virus", "influenza b virus", "influenza c virus"):
-            raise SampleError(f"Organism '{sample_organism}' isn't accepted for GenBank flu submissions; Organism must be one of: 'Influenza A virus', 'Influenza B virus' or 'Influenza C virus'")
-
-        # all flu submissions require `Isolation-source` column; flu A also requires `Serotype` column
-        if sample_organism.strip().lower() == "influenza a virus":
-            flu_required_columns = ["src-Isolation-source", "src-Serotype"]
-        else:
-            flu_required_columns = ["src-Isolation-source"]
-
-        # raise a SampleError if any `flu_required_columns` are missing
-        missing_flu_columns = [col for col in flu_required_columns if not get_value(sample_metadata_df, col).strip()]
-        if missing_flu_columns:
-            raise SampleError(f"NCBI requires {', '.join(missing_flu_columns)} for '{sample_organism}' submissions to GenBank")
-
-
-def write_metadata_template(
-    metadata_df: pd.DataFrame,
-    sample_column: str,
-    options: BuildOptions,
-    template_file: Path,
-) -> None:
-    """
-    Writes '<table_name>_template.tsv'. Contains the selected samples' required metadata columns to fill in and upload to the Terra table.
-    Mimics the behavior of the SeqSender submission wizard; the columns come from the schemas outlined in ('shiny/templates/'). The `metadata_df`
-    holds all existing/built sample metadata (including Terra values); empty cells hold '<column description>'.
-    """
-    templates_dir = Path(shutil.which("seqsender.py")).parent / "shiny" / "templates"
-    template_files = ["config.seqsender.seqsender.schema_template.csv"]
-    if options.biosample:
-        template_files.append(f"config.biosample.{options.biosample_package}_template.csv")
-    if options.sra:
-        template_files.append("config.sra.sra.schema_template.csv")
-    if options.genbank:
-        # genbank.schema_template.csv is left out: it only requires sequence_name and gb-sample_name, which come from the FASTA record IDs
-        template_files.append("config.genbank.genbank.flu.src.schema_template.csv" if options.seqsender_organism_tag == "FLU" else "config.genbank.genbank.src.schema_template.csv")
-
-    missing = [name for name in template_files if not (templates_dir / name).exists()]
-    if missing:
-        raise SystemExit(f"ERROR: seqsender has no metadata template {', '.join(missing)}; check BioSample_Package in the config file")
-
-    columns_df = pd.concat([pd.read_csv(templates_dir / name, dtype=str, keep_default_na=False) for name in template_files])
-
-    # NCBI requires `src-Serotype` (Influenza A only) and `src-Isolation-source` for flu submissions to GenBank, even though seqsender lists them as optional
-    # see `validate_sample_metadata` function
-    if options.genbank and options.seqsender_organism_tag == "FLU":
-        flu_required_columns = ["src-Isolation-source"]
-        if "organism" in metadata_df and (metadata_df["organism"].str.strip().str.lower() == "influenza a virus").any():
-            flu_required_columns.append("src-Serotype")
-        columns_df.loc[columns_df["column_name"].isin(flu_required_columns), "required_column"] = "Required"
-
-    columns_df = columns_df[columns_df["required_column"] != "Optional"]
-    # build_sample_metadata fills these in from the read inputs
-    columns_df = columns_df[~columns_df["column_name"].isin(["sra-file_location", "sra-file_1"])]
-    columns_df = columns_df.drop_duplicates("column_name")
-
-    # descriptions as one line of plain text (no HTML tags or quotes) so the TSV needs no quoting
-    placeholders = {
-        row.column_name: "<" + " ".join(re.sub(r"<[^>]+>", "", row.description).replace('"', "").split()) + ">"
-        for row in columns_df.itertuples()
-    }
-
-    template_df = metadata_df.reindex(columns=[sample_column, *placeholders]).fillna("")
-    for column, placeholder in placeholders.items():
-        template_df[column] = template_df[column].mask(template_df[column].str.strip() == "", placeholder)
-
-    template_df.to_csv(template_file, sep="\t", index=False)
-    logger.info(f"Wrote {len(placeholders)} required metadata columns for {len(template_df)} samples to {template_file}")
+        check_flu_genbank(
+            df=sample_metadata_df,
+        )
 
 
 def summarize_prep_errors(prep_log: Path) -> str:
