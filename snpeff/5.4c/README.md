@@ -18,7 +18,7 @@ annotated files.
 Additional tools:
 - SnpSift 5.4c (bundled with snpEff)
 - snpEff helper scripts, e.g. `buildDbNcbi.sh` (on `PATH` from `/snpEff/scripts`)
-- [theiagene](https://github.com/theiagen/theiagene) 1.1.0 (installed via `pip` from the release tarball)
+- [theiagene](https://github.com/theiagen/theiagene) 1.1.2 (installed via `pip` from the release tarball)
 
 ## Example Usage
 
