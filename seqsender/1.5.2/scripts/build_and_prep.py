@@ -202,15 +202,17 @@ def main():
         options=options,
     )
 
+    # --validation_only stops here: the reads aren't copied to the bucket and no submission tarball is written
+    if options.validation_only:
+        logger.info("--validation_only: skipping read upload to google bucket; skipping creation of submission tarball")
+        return
+
     # 8. copy the passing samples' reads to the `--sra_transfer_bucket` if appropriate
     if options.sra and options.sra_transfer_bucket:
-        if options.validation_only:
-            logger.info(f"--validation_only: the reads were not copied to {options.sra_transfer_bucket}")
-        else:
-            upload_reads(
-                valid_samples=valid_samples,
-                read_bucket=options.sra_transfer_bucket,
-            )
+        upload_reads(
+            valid_samples=valid_samples,
+            read_bucket=options.sra_transfer_bucket,
+        )
 
     # 9. tar submit/ for the submit task
     write_tarball(

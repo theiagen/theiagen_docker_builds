@@ -50,7 +50,7 @@ def check_flu_genbank(
     if sample_organism.strip().lower() not in ("influenza a virus", "influenza b virus", "influenza c virus"):
         raise SampleError(f"Organism '{sample_organism}' isn't accepted for GenBank flu submissions; Organism must be one of: 'Influenza A virus', 'Influenza B virus' or 'Influenza C virus'")
 
-    missing_flu_columns = [column for column in flu_genbank_required_columns(sample_organism) if not get_value(df, column).strip()]
+    missing_flu_columns = [column for column in flu_genbank_required_columns(sample_organism) if not get_value(df, column)]
     if missing_flu_columns:
         raise SampleError(f"NCBI requires {', '.join(missing_flu_columns)} for '{sample_organism}' submissions to GenBank")
 

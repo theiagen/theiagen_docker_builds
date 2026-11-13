@@ -16,7 +16,7 @@ def get_value(
     column: str,
 ) -> str:
     """Returns the sample's value in `column`, or '' if the column isn't in its metadata"""
-    return df[column].iloc[0] if column in df else ""
+    return df[column].iloc[0].strip() if column in df else ""
 
 
 def flu_genbank_required_columns(organism: str) -> list[str]:
