@@ -47,11 +47,24 @@ def validate_sample_metadata(
         options=options,
     )
 
-    # GenBank submissions for flu requires explicit organism name. Fail here rather than during submission.
+    # NCBI specific metadata requirements for GenBank FLU submissions; fail here rather than during submission
+    # see (https://github.com/ncbi/submission-schema/blob/master/genbank/influenza/Influenza-ProgrammaticHelp.pdf)
     if options.genbank and options.seqsender_organism_tag == "FLU":
+        # all flu submissions require an explicit organism name
         sample_organism = get_value(sample_metadata_df, "organism")
         if sample_organism.strip().lower() not in ("influenza a virus", "influenza b virus", "influenza c virus"):
             raise SampleError(f"Organism '{sample_organism}' isn't accepted for GenBank flu submissions; Organism must be one of: 'Influenza A virus', 'Influenza B virus' or 'Influenza C virus'")
+
+        # all flu submissions require `Isolation-source` column; flu A also requires `Serotype` column
+        if sample_organism.strip().lower() == "influenza a virus":
+            flu_required_columns = ["src-Isolation-source", "src-Serotype"]
+        else:
+            flu_required_columns = ["src-Isolation-source"]
+
+        # raise a SampleError if any `flu_required_columns` are missing
+        missing_flu_columns = [col for col in flu_required_columns if not get_value(sample_metadata_df, col).strip()]
+        if missing_flu_columns:
+            raise SampleError(f"NCBI requires {', '.join(missing_flu_columns)} for '{sample_organism}' submissions to GenBank")
 
 
 def write_metadata_template(
@@ -80,6 +93,15 @@ def write_metadata_template(
         raise SystemExit(f"ERROR: seqsender has no metadata template {', '.join(missing)}; check BioSample_Package in the config file")
 
     columns_df = pd.concat([pd.read_csv(templates_dir / name, dtype=str, keep_default_na=False) for name in template_files])
+
+    # NCBI requires `src-Serotype` (Influenza A only) and `src-Isolation-source` for flu submissions to GenBank, even though seqsender lists them as optional
+    # see `validate_sample_metadata` function
+    if options.genbank and options.seqsender_organism_tag == "FLU":
+        flu_required_columns = ["src-Isolation-source"]
+        if "organism" in metadata_df and (metadata_df["organism"].str.strip().str.lower() == "influenza a virus").any():
+            flu_required_columns.append("src-Serotype")
+        columns_df.loc[columns_df["column_name"].isin(flu_required_columns), "required_column"] = "Required"
+
     columns_df = columns_df[columns_df["required_column"] != "Optional"]
     # build_sample_metadata fills these in from the read inputs
     columns_df = columns_df[~columns_df["column_name"].isin(["sra-file_location", "sra-file_1"])]
