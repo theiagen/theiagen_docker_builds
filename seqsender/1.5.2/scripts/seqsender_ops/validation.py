@@ -166,7 +166,7 @@ def write_validation_summary(
     summary_df = pd.DataFrame({
         "sample_id": [sample.sample_id for sample in samples],
         "status": ["PASS" if sample.passed else "FAIL" for sample in samples],
-        "reason": [sample.reason for sample in samples],
+        "reason": [sample.error or "" for sample in samples],
     })
     summary_df.to_csv(output_dir / "validation_summary.tsv", sep="\t", index=False)
 

@@ -139,14 +139,13 @@ def main():
                 sample=sample,
                 options=options,
             )
-            sample.passed = True
         except SampleError as error:
-            sample.reason = str(error)
+            sample.error = str(error)
 
         if sample.passed:
             logger.info(f"{sample.sample_id}: PASS")
         else:
-            logger.warning(f"{sample.sample_id}: FAIL: {sample.reason}")
+            logger.warning(f"{sample.sample_id}: FAIL: {sample.error}")
 
     write_validation_summary(samples, args.output_dir)
 
