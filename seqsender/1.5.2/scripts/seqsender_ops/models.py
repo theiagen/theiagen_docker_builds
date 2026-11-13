@@ -98,3 +98,7 @@ class Sample:
     @property
     def prep_log(self) -> Path:
         return self.sample_dir / f"{self.sample_id}.seqsender_prep.log"
+
+
+class SampleError(Exception):
+    """A custom exception to describe a specific problem with one sample's metadata or associated files that fails validation"""

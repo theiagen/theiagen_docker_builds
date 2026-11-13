@@ -10,8 +10,8 @@ import pandas as pd
 from seqsender_ops.files import combine_passed, stage_samples, upload_reads
 from seqsender_ops.logging_config import setup_logging
 from seqsender_ops.metadata import build_sample_metadata, write_sample_metadata
-from seqsender_ops.models import DATABASES, BuildOptions
-from seqsender_ops.validation import run_prep, write_metadata_template, write_validation_summary
+from seqsender_ops.models import DATABASES, BuildOptions, SampleError
+from seqsender_ops.validation import run_prep, validate_sample_metadata, write_metadata_template, write_validation_summary
 
 logger = logging.getLogger("build_and_prep")
 
@@ -121,17 +121,22 @@ def main():
     # 5. validate each sample on its own; a sample that fails is left out of the submission
     for sample in samples:
         try:
+            # build_and_prep's own checks, then seqsender's
+            validate_sample_metadata(
+                sample_metadata_df=sample.metadata,
+                options=options,
+            )
             write_sample_metadata(
                 sample=sample,
                 options=options,
             )
-        except ValueError as error:
-            sample.reason = str(error)
-        else:
             run_prep(
                 sample=sample,
                 options=options,
             )
+            sample.passed = True
+        except SampleError as error:
+            sample.reason = str(error)
 
         if sample.passed:
             logger.info(f"{sample.sample_id}: PASS")

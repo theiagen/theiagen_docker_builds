@@ -4,8 +4,7 @@ from pathlib import Path
 import pandas as pd
 from Bio import SeqIO
 
-from .models import BIOSAMPLE_DB, SRA_DB, BuildOptions, Sample
-from .validation import check_existing_accessions
+from .models import BIOSAMPLE_DB, SRA_DB, BuildOptions, Sample, SampleError
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +26,12 @@ def expand_metadata_per_sequence(
     seqsender matches the required `sequence_name` column to the FASTA record ID. Overwrites any existing
     `sequence_name`/`gb-sample_name` columns previously stored in the input metadata/terra table.
     """
-    records = list(SeqIO.parse(assembly_fasta, "fasta"))
+    try:
+        records = list(SeqIO.parse(assembly_fasta, "fasta"))
+    except ValueError as error:
+        raise SampleError(f"assembly FASTA can't be read: {error}") from error
     if not records or any(len(record.seq) == 0 for record in records):
-        raise ValueError("assembly FASTA is empty or has an empty sequence")
+        raise SampleError("assembly FASTA is empty or has an empty sequence")
     seq_ids = [record.id for record in records]
     logger.info(f"Found {len(seq_ids)} FASTA record IDs in {assembly_fasta}")
 
@@ -121,25 +123,9 @@ def write_sample_metadata(
 ) -> None:
     """
     Creates a 'builds/<sample>/<sample>.metadata.csv' metadata file from `sample.metadata`, one row per FASTA record ID (genbank only).
-    Raises ValueError if the sample can't be submitted.
+    Raises SampleError if the sample's assembly FASTA is empty or can't be read.
     """
     sample_metadata_df = sample.metadata
-
-    # '<description>' text left over from metadata_template.tsv would otherwise be submitted to NCBI as the value
-    placeholder_columns = [column for column in sample_metadata_df if sample_metadata_df[column].str.fullmatch(r"<.*>").any()]
-    if placeholder_columns:
-        raise ValueError(f"fill in or clear the metadata template's '<description>' text in: {', '.join(placeholder_columns)}")
-
-    check_existing_accessions(
-        df=sample_metadata_df,
-        options=options,
-    )
-
-    # GenBank submissions for flu requires explicit organism name. Fail here rather than during submission.
-    if options.genbank and options.seqsender_organism_tag == "FLU":
-        sample_organism = get_value(sample_metadata_df, "organism")
-        if sample_organism.strip().lower() not in ("influenza a virus", "influenza b virus", "influenza c virus"):
-            raise ValueError(f"Organism '{sample_organism}' isn't accepted for GenBank flu submissions; Organism must be one of: 'Influenza A virus', 'Influenza B virus' or 'Influenza C virus'")
 
     logger.info(f"Building metadata file: {sample.metadata_csv}")
 

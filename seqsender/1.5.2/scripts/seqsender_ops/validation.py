@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from .models import BuildOptions, Sample
+from .metadata import get_value
+from .models import BuildOptions, Sample, SampleError
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +21,37 @@ def check_existing_accessions(
     Any value(s) under the `genbank_accession` column will count. This allows flu samples with partial accessions assigned to also fail.
     """
     # <db>_accession column exists and is non-empty
-    valid_accessions = [db for db in options.target_dbs if db.accession_column in df and df[db.accession_column].iloc[0]]
+    valid_accessions = [db for db in options.target_dbs if get_value(df, db.accession_column)]
     if valid_accessions:
-        raise ValueError(
+        raise SampleError(
             f"already has {', '.join(db.accession_column for db in valid_accessions)}; "
             f"turn off {', '.join(f'submit_to_{db.name}' for db in valid_accessions)}"
         )
+
+
+def validate_sample_metadata(
+    sample_metadata_df: pd.DataFrame,
+    options: BuildOptions,
+) -> None:
+    """
+    Checks the sample's metadata for problems `seqsender prep` doesn't catch, so they fail here rather than during submission.
+    Raises SampleError if the sample can't be submitted.
+    """
+    # '<description>' text left over from metadata_template.tsv would otherwise be submitted to NCBI as the value
+    placeholder_columns = [column for column in sample_metadata_df if sample_metadata_df[column].str.fullmatch(r"<.*>").any()]
+    if placeholder_columns:
+        raise SampleError(f"fill in or clear the metadata template's '<description>' text in: {', '.join(placeholder_columns)}")
+
+    check_existing_accessions(
+        df=sample_metadata_df,
+        options=options,
+    )
+
+    # GenBank submissions for flu requires explicit organism name. Fail here rather than during submission.
+    if options.genbank and options.seqsender_organism_tag == "FLU":
+        sample_organism = get_value(sample_metadata_df, "organism")
+        if sample_organism.strip().lower() not in ("influenza a virus", "influenza b virus", "influenza c virus"):
+            raise SampleError(f"Organism '{sample_organism}' isn't accepted for GenBank flu submissions; Organism must be one of: 'Influenza A virus', 'Influenza B virus' or 'Influenza C virus'")
 
 
 def write_metadata_template(
@@ -91,7 +117,7 @@ def run_prep(
     sample: Sample,
     options: BuildOptions,
 ) -> None:
-    """Runs seqsender prep on the sample's folder and records whether it passed"""
+    """Runs seqsender prep on the sample's folder; raises SampleError with seqsender's errors if it fails"""
     command = [
         "micromamba", "run", "-n", "seqsender", "seqsender.py", "prep", *options.db_flags,
         "--organism", options.seqsender_organism_tag,
@@ -106,9 +132,8 @@ def run_prep(
     with open(sample.prep_log, "w") as log:
         result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT)
 
-    sample.passed = result.returncode == 0
-    if not sample.passed:
-        sample.reason = summarize_prep_errors(sample.prep_log)
+    if result.returncode != 0:
+        raise SampleError(summarize_prep_errors(sample.prep_log))
 
 
 def write_validation_summary(
