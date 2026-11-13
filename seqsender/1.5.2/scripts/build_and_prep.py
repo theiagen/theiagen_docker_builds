@@ -24,6 +24,7 @@ from seqsender_ops.models import (
 )
 from seqsender_ops.validation import (
     run_prep,
+    sample_prep,
     validate_sample_metadata,
     write_validation_summary,
 )
@@ -135,7 +136,7 @@ def main():
                 sample=sample,
                 options=options,
             )
-            run_prep(
+            sample_prep(
                 sample=sample,
                 options=options,
             )
@@ -149,12 +150,26 @@ def main():
 
     write_validation_summary(samples, args.output_dir)
 
-    # 6. copy valid samples to the `--sra_transfer_bucket` if appropriate. exit if no valid samples
+    # 6. exit if no valid samples
     valid_samples = [sample for sample in samples if sample.passed]
     if not valid_samples:
         logger.warning("No samples passed seqsender prep; no submission tarball written")
         return
 
+    # 7. combine the passing samples into submit/ and prep them together, the way `seqsender submit` will
+    combine_passed(
+        valid_samples=valid_samples,
+        submit_dir=submit_dir,
+        config_file=options.config_file,
+        include_reads=not options.sra_transfer_bucket,
+    )
+    run_prep(
+        submit_dir=submit_dir,
+        prep_log=builds_dir / "combined.seqsender_prep.log",
+        options=options,
+    )
+
+    # 8. copy the passing samples' reads to the `--sra_transfer_bucket` if appropriate
     if options.sra and options.sra_transfer_bucket:
         if options.validation_only:
             logger.info(f"--validation_only: the reads were not copied to {options.sra_transfer_bucket}")
@@ -164,14 +179,7 @@ def main():
                 read_bucket=options.sra_transfer_bucket,
             )
 
-    # 7. combine the passing samples into submit/ and tar it for the submit task
-    combine_passed(
-        valid_samples=valid_samples,
-        submit_dir=submit_dir,
-        config_file=options.config_file,
-        include_reads=not options.sra_transfer_bucket,
-    )
-
+    # 9. tar submit/ for the submit task
     write_tarball(
         submit_dir=submit_dir,
         tarball=args.output_dir / "seqsender_post_validation_checkpoint.tar.gz",

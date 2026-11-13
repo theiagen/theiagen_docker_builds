@@ -1,7 +1,9 @@
 import logging
 import re
+import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 
@@ -88,27 +90,73 @@ def summarize_prep_errors(prep_log: Path) -> str:
     return lines[-1] if lines else "seqsender prep failed without output"
 
 
-def run_prep(
-    sample: Sample,
+def seqsender_prep(
+    submission_dir: Path,
+    submission_name: str,
+    metadata_file: Path,
+    fasta_file: Optional[Path],
+    prep_log: Path,
     options: BuildOptions,
 ) -> None:
-    """Runs seqsender prep on the sample's folder; raises SampleError with seqsender's errors if it fails"""
+    """Runs `seqsender prep` and writes its output to `prep_log`; raises SampleError with seqsender's errors if it fails"""
     command = [
         "micromamba", "run", "-n", "seqsender", "seqsender.py", "prep", *options.db_flags,
         "--organism", options.seqsender_organism_tag,
-        "--submission_dir", str(sample.sample_dir.parent),
-        "--submission_name", sample.sample_id,
+        "--submission_dir", str(submission_dir),
+        "--submission_name", submission_name,
         "--config_file", str(options.config_file),
-        "--metadata_file", str(sample.metadata_csv),
+        "--metadata_file", str(metadata_file),
     ]
-    if sample.fasta:
-        command += ["--fasta_file", str(sample.fasta)]
+    if fasta_file:
+        command += ["--fasta_file", str(fasta_file)]
 
-    with open(sample.prep_log, "w") as log:
+    with open(prep_log, "w") as log:
         result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT)
 
     if result.returncode != 0:
-        raise SampleError(summarize_prep_errors(sample.prep_log))
+        raise SampleError(summarize_prep_errors(prep_log))
+
+
+def sample_prep(
+    sample: Sample,
+    options: BuildOptions,
+) -> None:
+    """Runs seqsender prep on one sample's folder; raises SampleError with seqsender's errors if it fails"""
+    seqsender_prep(
+        submission_dir=sample.sample_dir.parent,
+        submission_name=sample.sample_id,
+        metadata_file=sample.metadata_csv,
+        fasta_file=sample.fasta,
+        prep_log=sample.prep_log,
+        options=options,
+    )
+
+
+def run_prep(
+    submit_dir: Path,
+    prep_log: Path,
+    options: BuildOptions,
+) -> None:
+    """
+    Runs seqsender prep on the collection of passing samples together in 'submit/', the same way `seqsender submit` will.
+    `sample_prep` checks each sample on its own, this catches conflicts between samples (e.g. duplicate entries). Exits
+    if it fails, before any reads are uploaded or the tarball is written.
+    """
+    try:
+        seqsender_prep(
+            submission_dir=submit_dir,
+            submission_name="combined_prep",
+            metadata_file=submit_dir / "metadata.csv",
+            fasta_file=submit_dir / "sequence.fasta" if options.genbank else None,
+            prep_log=prep_log,
+            options=options,
+        )
+    except SampleError as error:
+        raise SystemExit(f"ERROR: the samples that passed on their own fail seqsender prep together: {error}")
+    # prep writes to 'submit/combined_prep/'; removed so it isn't in the tarball
+    shutil.rmtree(submit_dir / "combined_prep", ignore_errors=True)
+
+    logger.info("The collection of passing samples also pass 'seqsender prep' validation together as one unit")
 
 
 def write_validation_summary(
