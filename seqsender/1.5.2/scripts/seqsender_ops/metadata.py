@@ -1,14 +1,21 @@
 import logging
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 from Bio import SeqIO
 
-from .models import Sample
+from .models import BIOSAMPLE_DB, SRA_DB, BuildOptions, Sample
 from .validation import check_existing_accessions
 
 logger = logging.getLogger(__name__)
+
+
+def get_value(
+    df: pd.DataFrame,
+    column: str,
+) -> str:
+    """Returns the sample's value in `column`, or '' if the column isn't in its metadata"""
+    return df[column].iloc[0] if column in df else ""
 
 
 def expand_metadata_per_sequence(
@@ -37,9 +44,7 @@ def expand_metadata_per_sequence(
 
 def add_existing_accessions(
     df: pd.DataFrame,
-    biosample: bool,
-    sra: bool,
-    definition_line_accessions: bool,
+    options: BuildOptions,
 ) -> None:
     """
     Adds the BioSample/SRA accessions from an earlier run to a GenBank submission's metadata, matching what seqsender
@@ -48,36 +53,35 @@ def add_existing_accessions(
     Necessary for attempting to resubmit a failed Genbank submission when everything else has successfully processed.
     """
     tags = []
-    for selected, accession_column, modifier in (
-        (biosample, "biosample_accession", "BioSample"),
-        (sra, "sra_accession", "SRA"),
-    ):
-        accession = df[accession_column].iloc[0] if accession_column in df else ""
-        if not selected and accession:
-            df[f"src-{modifier}"] = accession
-            tags.append(f"[{modifier}={accession}]")
-            logger.info(f"Setting `src-{modifier}` metadata column to: '{accession}'")
 
-    if definition_line_accessions and tags:
-        column = "gb-fasta_definition_line_modifiers"
-        existing = df[column].iloc[0] if column in df else ""
+    biosample_accession = get_value(df, BIOSAMPLE_DB.accession_column)
+    # if `biosample_accession` column exists, but `submit_to_biosample = false`; we can still link existing accessions to GenBank records
+    if biosample_accession and not options.biosample:
+        df["src-BioSample"] = biosample_accession
+        tags.append(f"[BioSample={biosample_accession}]")
+        logger.info(f"Setting `src-BioSample` metadata column to: '{biosample_accession}'")
+
+    # if `sra_accession` column exists, but `submit_to_sra = false`; we can still link existing accessions to GenBank records
+    sra_accession = get_value(df, SRA_DB.accession_column)
+    if sra_accession and not options.sra:
+        df["src-SRA"] = sra_accession
+        tags.append(f"[SRA={sra_accession}]")
+        logger.info(f"Setting `src-SRA` metadata column to: '{sra_accession}'")
+
+    if options.definition_line_accessions and tags:
+        # if existing `gb-fasta_definition_line_modifiers` column; use that
+        def_line_accession = get_value(df, "gb-fasta_definition_line_modifiers")
         # added after any modifiers already defined in the metadata table (mimics seqsender)
-        modifiers = " ".join([*existing.split(), *tags])
-        df[column] = modifiers
-        logger.info(f"Setting `{column}` metadata column to: '{modifiers}'")
+        modifiers = " ".join([*def_line_accession.split(), *tags])
+        df["gb-fasta_definition_line_modifiers"] = modifiers
+        logger.info(f"Setting `gb-fasta_definition_line_modifiers` metadata column to: '{modifiers}'")
 
 
 def build_sample_metadata(
     sample: Sample,
     metadata_df: pd.DataFrame,
     sample_column: str,
-    biosample: bool,
-    sra: bool,
-    genbank: bool,
-    link_databases: bool,
-    definition_line_accessions: bool,
-    bioproject: str,
-    read_bucket: Optional[str] = None,
+    options: BuildOptions,
 ) -> pd.DataFrame:
     """
     Returns the sample's row from the input Terra table (`--metadata_file`) with the columns build_and_prep automatically fills in itself
@@ -87,27 +91,25 @@ def build_sample_metadata(
     logger.info(f"Filling in metadata columns for {sample.sample_id}")
 
     # adds required metadata columns for ALL submissions
-    sample_metadata_df["bioproject"] = bioproject
-    logger.info(f"Setting `bioproject` metadata column to: '{bioproject}'")
+    sample_metadata_df["bioproject"] = options.bioproject
+    logger.info(f"Setting `bioproject` metadata column to: '{options.bioproject}'")
 
     # adds required metadata columns for SRA submissions
     if sample.reads:
-        location = "cloud" if read_bucket else "local"
+        location = "cloud" if options.sra_transfer_bucket else "local"
         sample_metadata_df["sra-file_location"] = location
         logger.info(f"Setting `sra-file_location` metadata column to: '{location}'")
 
         for n, read in enumerate(sample.reads, start=1):
-            read_path = f"{read_bucket}/{read.name}" if read_bucket else read.name
+            read_path = f"{options.sra_transfer_bucket}/{read.name}" if options.sra_transfer_bucket else read.name
             sample_metadata_df[f"sra-file_{n}"] = read_path
             logger.info(f"Setting `sra-file_{n}` metadata column to: '{read_path}'")
 
     # links a GenBank submission to the BioSample/SRA accessioned in an earlier run (if applicable)
-    if genbank and link_databases:
+    if options.genbank and options.link_databases:
         add_existing_accessions(
             df=sample_metadata_df,
-            biosample=biosample,
-            sra=sra,
-            definition_line_accessions=definition_line_accessions,
+            options=options,
         )
 
     return sample_metadata_df
@@ -115,10 +117,7 @@ def build_sample_metadata(
 
 def write_sample_metadata(
     sample: Sample,
-    seqsender_organism_tag: str,
-    biosample: bool,
-    sra: bool,
-    genbank: bool,
+    options: BuildOptions,
 ) -> None:
     """
     Creates a 'builds/<sample>/<sample>.metadata.csv' metadata file from `sample.metadata`, one row per FASTA record ID (genbank only).
@@ -133,21 +132,19 @@ def write_sample_metadata(
 
     check_existing_accessions(
         df=sample_metadata_df,
-        biosample=biosample,
-        sra=sra,
-        genbank=genbank,
+        options=options,
     )
 
     # GenBank submissions for flu requires explicit organism name. Fail here rather than during submission.
-    if genbank and seqsender_organism_tag == "FLU":
-        sample_organism = sample_metadata_df["organism"].iloc[0] if "organism" in sample_metadata_df else ""
+    if options.genbank and options.seqsender_organism_tag == "FLU":
+        sample_organism = get_value(sample_metadata_df, "organism")
         if sample_organism.strip().lower() not in ("influenza a virus", "influenza b virus", "influenza c virus"):
             raise ValueError(f"Organism '{sample_organism}' isn't accepted for GenBank flu submissions; Organism must be one of: 'Influenza A virus', 'Influenza B virus' or 'Influenza C virus'")
 
     logger.info(f"Building metadata file: {sample.metadata_csv}")
 
     # adds required metadata columns AND rows for Genbank submissions
-    if genbank:
+    if options.genbank:
         sample_metadata_df = expand_metadata_per_sequence(
             df=sample_metadata_df,
             assembly_fasta=sample.fasta

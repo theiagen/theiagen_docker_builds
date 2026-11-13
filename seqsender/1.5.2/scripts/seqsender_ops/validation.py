@@ -3,47 +3,35 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
-from .models import Sample
+from .models import BuildOptions, Sample
 
 logger = logging.getLogger(__name__)
 
 
 def check_existing_accessions(
     df: pd.DataFrame,
-    biosample: bool,
-    sra: bool,
-    genbank: bool,
+    options: BuildOptions,
 ) -> None:
     """
     Raises if the sample already has an accession for a selected database, since submitting it again would make a duplicate.
-    Any `genbank_accession` counts, so a flu sample with only some segments accessioned also fails.
+    Any value(s) under the `genbank_accession` column will count. This allows flu samples with partial accessions assigned to also fail.
     """
-    columns = []
-    flags = []
-    for selected, accession_column, flag in (
-        (biosample, "biosample_accession", "submit_to_biosample"),
-        (sra, "sra_accession", "submit_to_sra"),
-        (genbank, "genbank_accession", "submit_to_genbank"),
-    ):
-        if selected and accession_column in df and df[accession_column].iloc[0]:
-            columns.append(accession_column)
-            flags.append(flag)
-    if columns:
-        raise ValueError(f"already has {', '.join(columns)}; turn off {', '.join(flags)}")
+    # <db>_accession column exists and is non-empty
+    valid_accessions = [db for db in options.target_dbs if db.accession_column in df and df[db.accession_column].iloc[0]]
+    if valid_accessions:
+        raise ValueError(
+            f"already has {', '.join(db.accession_column for db in valid_accessions)}; "
+            f"turn off {', '.join(f'submit_to_{db.name}' for db in valid_accessions)}"
+        )
 
 
 def write_metadata_template(
     metadata_df: pd.DataFrame,
     sample_column: str,
-    seqsender_organism_tag: str,
-    biosample_package: Optional[str],
-    biosample: bool,
-    sra: bool,
-    genbank: bool,
+    options: BuildOptions,
     template_file: Path,
 ) -> None:
     """
@@ -53,13 +41,13 @@ def write_metadata_template(
     """
     templates_dir = Path(shutil.which("seqsender.py")).parent / "shiny" / "templates"
     template_files = ["config.seqsender.seqsender.schema_template.csv"]
-    if biosample:
-        template_files.append(f"config.biosample.{biosample_package}_template.csv")
-    if sra:
+    if options.biosample:
+        template_files.append(f"config.biosample.{options.biosample_package}_template.csv")
+    if options.sra:
         template_files.append("config.sra.sra.schema_template.csv")
-    if genbank:
+    if options.genbank:
         # genbank.schema_template.csv is left out: it only requires sequence_name and gb-sample_name, which come from the FASTA record IDs
-        template_files.append("config.genbank.genbank.flu.src.schema_template.csv" if seqsender_organism_tag == "FLU" else "config.genbank.genbank.src.schema_template.csv")
+        template_files.append("config.genbank.genbank.flu.src.schema_template.csv" if options.seqsender_organism_tag == "FLU" else "config.genbank.genbank.src.schema_template.csv")
 
     missing = [name for name in template_files if not (templates_dir / name).exists()]
     if missing:
@@ -101,17 +89,15 @@ def summarize_prep_errors(prep_log: Path) -> str:
 
 def run_prep(
     sample: Sample,
-    db_flags: list[str],
-    seqsender_organism_tag: str,
-    config_file: Path,
+    options: BuildOptions,
 ) -> None:
     """Runs seqsender prep on the sample's folder and records whether it passed"""
     command = [
-        "micromamba", "run", "-n", "seqsender", "seqsender.py", "prep", *db_flags,
-        "--organism", seqsender_organism_tag,
+        "micromamba", "run", "-n", "seqsender", "seqsender.py", "prep", *options.db_flags,
+        "--organism", options.seqsender_organism_tag,
         "--submission_dir", str(sample.sample_dir.parent),
         "--submission_name", sample.sample_id,
-        "--config_file", str(config_file),
+        "--config_file", str(options.config_file),
         "--metadata_file", str(sample.metadata_csv),
     ]
     if sample.fasta:

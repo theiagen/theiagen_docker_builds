@@ -6,12 +6,11 @@ import tarfile
 from pathlib import Path
 
 import pandas as pd
-import yaml
 
 from seqsender_ops.files import combine_passed, stage_samples, upload_reads
 from seqsender_ops.logging_config import setup_logging
 from seqsender_ops.metadata import build_sample_metadata, write_sample_metadata
-from seqsender_ops.models import DATABASES
+from seqsender_ops.models import DATABASES, BuildOptions
 from seqsender_ops.validation import run_prep, write_metadata_template, write_validation_summary
 
 logger = logging.getLogger("build_and_prep")
@@ -41,13 +40,9 @@ def parse_args():
     return parser.parse_args()
 
 
-def check_inputs(args) -> list[str]:
-    """
-    Exits on problems with the inputs as a whole; problems with a single sample only fail that sample.
-    Returns the seqsender database flags, e.g. ["--biosample", "--sra"]
-    """
-    db_flags = [f"--{db.name}" for db in DATABASES if getattr(args, db.name)]
-    if not db_flags:
+def check_inputs(args) -> None:
+    """Exits on problems with the inputs as a whole; problems with a single sample only fail that sample"""
+    if not any(getattr(args, db.name) for db in DATABASES):
         raise SystemExit("ERROR: choose at least one of --biosample, --sra or --genbank")
     if args.sra and not args.read1_fastqs:
         raise SystemExit("ERROR: --read1_fastqs is required for SRA submission")
@@ -55,10 +50,8 @@ def check_inputs(args) -> list[str]:
         raise SystemExit("ERROR: --assembly_fastas is required for GenBank submission")
     if args.genbank and args.seqsender_organism_tag not in ("FLU", "COV"):
         raise SystemExit(f"ERROR: GenBank submission is only supported for --seqsender_organism_tag FLU and COV, not {args.seqsender_organism_tag}")
-    if args.sra_transfer_bucket:
-        if not args.sra_transfer_bucket.startswith("gs://"):
-            raise SystemExit(f"ERROR: --sra_transfer_bucket must be a gs:// bucket, not {args.sra_transfer_bucket}")
-        args.sra_transfer_bucket = args.sra_transfer_bucket.rstrip("/")
+    if args.sra_transfer_bucket and not args.sra_transfer_bucket.startswith("gs://"):
+        raise SystemExit(f"ERROR: --sra_transfer_bucket must be a gs:// bucket, not {args.sra_transfer_bucket}")
 
     for name in ("assembly_fastas", "read1_fastqs", "read2_fastqs"):
         files = getattr(args, name)
@@ -71,33 +64,28 @@ def check_inputs(args) -> list[str]:
         duplicates = sorted({name for name in names if names.count(name) > 1})
         if duplicates:
             raise SystemExit(f"ERROR: read files must have unique names; repeated: {', '.join(duplicates)}")
-    return db_flags
 
 
 def main():
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     setup_logging(args.output_dir / "seqsender_build_and_prep.log")
-    db_flags = check_inputs(args)
-    logger.info(f"Preparing {len(args.sample_ids)} samples for {', '.join(flag.lstrip('-') for flag in db_flags)}")
+    check_inputs(args)
+    options = BuildOptions.from_args(args)
+    logger.info(f"Preparing {len(args.sample_ids)} samples for {', '.join(db.name for db in options.target_dbs)}")
 
     builds_dir = args.output_dir / "builds"
     builds_dir.mkdir(parents=True, exist_ok=True)
     submit_dir = args.output_dir / "submit"
     submit_dir.mkdir(parents=True, exist_ok=True)
 
-    # check the input config file for options that will modify our metadata/assembly fasta submission files
-    ncbi_config = yaml.safe_load(args.config_file.read_text())["Submission"]["NCBI"]
-    link_databases = ncbi_config["Link_Sample_Between_NCBI_Databases"]
-    definition_line_accessions = ncbi_config.get("Add_Definition_Line_Accessions")
-
     # 1. stage only the files the selected databases use
     samples = stage_samples(
         builds_dir=builds_dir,
         sample_ids=args.sample_ids,
-        assembly_fastas=args.assembly_fastas if args.genbank else [],
-        read1_fastqs=args.read1_fastqs if args.sra else [],
-        read2_fastqs=args.read2_fastqs if args.sra else [],
+        assembly_fastas=args.assembly_fastas if options.genbank else [],
+        read1_fastqs=args.read1_fastqs if options.sra else [],
+        read2_fastqs=args.read2_fastqs if options.sra else [],
     )
     num_fastas = sum(sample.fasta is not None for sample in samples)
     num_reads = sum(len(sample.reads) for sample in samples)
@@ -119,24 +107,14 @@ def main():
             sample=sample,
             metadata_df=metadata_df,
             sample_column=sample_column,
-            biosample=args.biosample,
-            sra=args.sra,
-            genbank=args.genbank,
-            link_databases=link_databases,
-            definition_line_accessions=definition_line_accessions,
-            bioproject=args.bioproject,
-            read_bucket=args.sra_transfer_bucket,
+            options=options,
         )
 
     # 4. the template of required columns is written even if every sample fails validation below
     write_metadata_template(
         metadata_df=pd.concat([sample.metadata for sample in samples]),
         sample_column=sample_column,
-        seqsender_organism_tag=args.seqsender_organism_tag,
-        biosample_package=ncbi_config.get("BioSample_Package"),
-        biosample=args.biosample,
-        sra=args.sra,
-        genbank=args.genbank,
+        options=options,
         template_file=args.output_dir / f"{args.metadata_file.stem}_template.tsv",
     )
 
@@ -145,19 +123,14 @@ def main():
         try:
             write_sample_metadata(
                 sample=sample,
-                seqsender_organism_tag=args.seqsender_organism_tag,
-                biosample=args.biosample,
-                sra=args.sra,
-                genbank=args.genbank,
+                options=options,
             )
         except ValueError as error:
             sample.reason = str(error)
         else:
             run_prep(
                 sample=sample,
-                db_flags=db_flags,
-                seqsender_organism_tag=args.seqsender_organism_tag,
-                config_file=args.config_file,
+                options=options,
             )
 
         if sample.passed:
@@ -173,21 +146,21 @@ def main():
         logger.warning("No samples passed seqsender prep; no submission tarball written")
         return
 
-    if args.sra and args.sra_transfer_bucket:
-        if args.validation_only:
-            logger.info(f"--validation_only: the reads were not copied to {args.sra_transfer_bucket}")
+    if options.sra and options.sra_transfer_bucket:
+        if options.validation_only:
+            logger.info(f"--validation_only: the reads were not copied to {options.sra_transfer_bucket}")
         else:
             upload_reads(
                 valid_samples=valid_samples,
-                read_bucket=args.sra_transfer_bucket,
+                read_bucket=options.sra_transfer_bucket,
             )
 
     # 7. combine the passing samples into submit/ and tar it for the submit task
     combine_passed(
         valid_samples=valid_samples,
         submit_dir=submit_dir,
-        config_file=args.config_file,
-        include_reads=not args.sra_transfer_bucket,
+        config_file=options.config_file,
+        include_reads=not options.sra_transfer_bucket,
     )
 
     # reads are already gzipped, so compress lightly
