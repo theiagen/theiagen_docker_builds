@@ -92,6 +92,14 @@ def build_sample_metadata(
     sample_metadata_df = metadata_df[metadata_df[sample_column] == sample.sample_id].copy()
     logger.info(f"Filling in metadata columns for {sample.sample_id}")
 
+    # Excel re-saves 'YYYY-MM-DD' dates as 'M/D/YYYY', which seqsender rejects; any other value is left for seqsender prep to validate
+    if "collection_date" in sample_metadata_df:
+        dates = pd.to_datetime(sample_metadata_df["collection_date"], format="%m/%d/%Y", errors="coerce")
+        if dates.notna().any():
+            converted = dates.dt.strftime("%Y-%m-%d")
+            sample_metadata_df.loc[dates.notna(), "collection_date"] = converted
+            logger.info(f"Setting `collection_date` metadata column to: '{converted.iloc[0]}' (converted from M/D/YYYY)")
+
     # adds required metadata columns for ALL submissions
     sample_metadata_df["bioproject"] = options.bioproject
     logger.info(f"Setting `bioproject` metadata column to: '{options.bioproject}'")
