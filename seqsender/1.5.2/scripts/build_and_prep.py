@@ -11,6 +11,7 @@ import yaml
 
 from seqsender_ops.files import combine_passed, stage_samples, upload_reads
 from seqsender_ops.metadata import build_sample_metadata, write_sample_metadata
+from seqsender_ops.models import DATABASES
 from seqsender_ops.validation import run_prep, write_metadata_template, write_validation_summary
 
 logger = logging.getLogger("build_and_prep")
@@ -53,7 +54,7 @@ def check_inputs(args) -> list[str]:
     Exits on problems with the inputs as a whole; problems with a single sample only fail that sample.
     Returns the seqsender database flags, e.g. ["--biosample", "--sra"]
     """
-    db_flags = [f"--{name}" for name in ("biosample", "sra", "genbank") if getattr(args, name)]
+    db_flags = [f"--{db.name}" for db in DATABASES if getattr(args, db.name)]
     if not db_flags:
         raise SystemExit("ERROR: choose at least one of --biosample, --sra or --genbank")
     if args.sra and not args.read1_fastqs:

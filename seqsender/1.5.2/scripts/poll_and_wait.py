@@ -10,17 +10,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from seqsender_ops.models import DATABASES
+
 logger = logging.getLogger("poll_and_wait")
 
 # DELETED: NCBI removed the submission, e.g. it stayed in error too long
 ERROR_STATUSES = {"ERROR", "FAILED", "DELETED"}
-# submission_status_report.csv sample name and accession columns for each database
-ACCESSION_COLUMNS = {
-    "BIOSAMPLE": ("bs-sample_name", "biosample_accession"),
-    "SRA": ("sra-sample_name", "sra_accession"),
-    "GENBANK": ("gb-sample_name", "genbank_accession"),
-}
-
 
 def setup_logging(log_file: Path) -> None:
     """Logs to stdout and to log_file"""
@@ -113,11 +108,11 @@ def missing_accessions(status_report: Path) -> dict[str, list[str]]:
     """Returns the sample names in submission_status_report.csv that have no accession, for each database"""
     report_df = pd.read_csv(status_report, dtype=str, keep_default_na=False)
     missing = {}
-    for database, (name_column, accession_column) in ACCESSION_COLUMNS.items():
-        if name_column in report_df:
-            names = report_df.loc[report_df[accession_column].str.strip() == "", name_column].unique().tolist()
+    for db in DATABASES:
+        if db.sample_name_column in report_df:
+            names = report_df.loc[report_df[db.accession_column].str.strip() == "", db.sample_name_column].unique().tolist()
             if names:
-                missing[database] = names
+                missing[db.name.upper()] = names
     return missing
 
 
