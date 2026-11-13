@@ -6,11 +6,28 @@ from pathlib import Path
 
 import pandas as pd
 
-from seqsender_ops.files import combine_passed, stage_samples, upload_reads, write_tarball
+from seqsender_ops.files import (
+    combine_passed,
+    stage_samples,
+    upload_reads,
+    write_tarball,
+)
+from seqsender_ops.metadata import (
+    build_sample_metadata,
+    write_sample_metadata,
+)
+from seqsender_ops.models import (
+    DATABASES,
+    BuildOptions,
+    SampleError,
+)
+from seqsender_ops.validation import (
+    run_prep,
+    validate_sample_metadata,
+    write_metadata_template,
+    write_validation_summary,
+)
 from seqsender_ops.logging_config import setup_logging
-from seqsender_ops.metadata import build_sample_metadata, write_sample_metadata
-from seqsender_ops.models import DATABASES, BuildOptions, SampleError
-from seqsender_ops.validation import run_prep, validate_sample_metadata, write_metadata_template, write_validation_summary
 
 logger = logging.getLogger("build_and_prep")
 
@@ -74,9 +91,7 @@ def main():
     logger.info(f"Preparing {len(args.sample_ids)} samples for {', '.join(db.name for db in options.target_dbs)}")
 
     builds_dir = args.output_dir / "builds"
-    builds_dir.mkdir(parents=True, exist_ok=True)
     submit_dir = args.output_dir / "submit"
-    submit_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. stage only the files the selected databases use
     samples = stage_samples(
@@ -86,9 +101,6 @@ def main():
         read1_fastqs=args.read1_fastqs if options.sra else [],
         read2_fastqs=args.read2_fastqs if options.sra else [],
     )
-    num_fastas = sum(sample.fasta is not None for sample in samples)
-    num_reads = sum(len(sample.reads) for sample in samples)
-    logger.info(f"Staged {len(samples)} samples ({num_fastas} FASTAs, {num_reads} reads) in {builds_dir}")
 
     # 2. the Terra table is the base of each sample's metadata.csv; entity:{table_name}_id holds the sample IDs
     metadata_df = pd.read_csv(args.metadata_file, sep="\t", dtype=str, keep_default_na=False)

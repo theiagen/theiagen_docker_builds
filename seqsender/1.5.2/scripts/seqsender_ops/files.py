@@ -58,6 +58,11 @@ def stage_samples(
                 sample.reads.append(read)
 
         all_samples.append(sample)
+
+    num_fastas = sum(sample.fasta is not None for sample in all_samples)
+    num_reads = sum(len(sample.reads) for sample in all_samples)
+    logger.info(f"Staged {len(all_samples)} samples ({num_fastas} FASTAs, {num_reads} reads) in {builds_dir}")
+
     return all_samples
 
 
@@ -93,6 +98,7 @@ def combine_passed(
     """
 
     logger.info("Creating final submission folder for samples that passed seqsender prep validation")
+    submit_dir.mkdir(parents=True, exist_ok=True)
 
     raw_reads_dir = submit_dir / "raw_reads"
     if include_reads:
