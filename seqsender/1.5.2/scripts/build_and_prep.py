@@ -48,7 +48,7 @@ def parse_args():
     # with a transfer bucket, NCBI fetches the reads from the bucket ('cloud'); without one, seqsender uploads them over FTP ('local')
     parser.add_argument("--sra_transfer_bucket", type=str, help="Optional; NCBI-readable bucket the passing samples' reads are copied to")
 
-    parser.add_argument("--seqsender_organism_tag", type=str, required=True, help="seqsender organism; options include 'FLU', 'COV', or 'OTHER'")
+    parser.add_argument("--seqsender_organism_tag", type=str, required=True, choices=["FLU", "COV", "OTHER"], help="seqsender organism passed to `seqsender prep --organism`; options include 'FLU', 'COV', or 'OTHER'")
     parser.add_argument("--biosample", action="store_true")
     parser.add_argument("--sra", action="store_true")
     parser.add_argument("--genbank", action="store_true")
