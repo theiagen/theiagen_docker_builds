@@ -2,10 +2,14 @@
 
 import argparse
 import logging
+import shutil
 from pathlib import Path
 
 import pandas as pd
 
+from seqsender_ops.cli import (
+    seqsender_prep,
+)
 from seqsender_ops.files import (
     combine_passed,
     stage_samples,
@@ -23,8 +27,6 @@ from seqsender_ops.models import (
     SampleError,
 )
 from seqsender_ops.validation import (
-    run_prep,
-    sample_prep,
     validate_sample,
     write_validation_summary,
 )
@@ -174,8 +176,12 @@ def main():
                 sample=sample,
                 options=options,
             )
-            sample_prep(
-                sample=sample,
+            seqsender_prep(
+                submission_dir=builds_dir,
+                submission_name=sample.sample_id,
+                metadata_file=sample.metadata_csv,
+                fasta_file=sample.fasta,
+                prep_log=sample.prep_log,
                 options=options,
             )
         except SampleError as error:
@@ -201,11 +207,22 @@ def main():
         config_file=options.config_file,
         include_reads=not options.sra_transfer_bucket,
     )
-    run_prep(
-        submit_dir=submit_dir,
-        prep_log=builds_dir / "combined.seqsender_prep.log",
-        options=options,
-    )
+    # Runs seqsender prep on the collection of passing samples together in 'submit/'
+    # catches conflicts between samples (e.g. duplicate entries) before any reads are uploaded or the tarball is written
+    try:
+        seqsender_prep(
+            submission_dir=submit_dir,
+            submission_name="combined_prep",
+            metadata_file=submit_dir / "metadata.csv",
+            fasta_file=submit_dir / "sequence.fasta" if options.genbank else None,
+            prep_log=builds_dir / "combined.seqsender_prep.log",
+            options=options,
+        )
+    except SampleError as error:
+        raise SystemExit(f"ERROR: the samples that passed on their own fail seqsender prep together: {error}")
+    # prep writes to 'submit/combined_prep/'; removed so it isn't in the tarball
+    shutil.rmtree(submit_dir / "combined_prep", ignore_errors=True)
+    logger.info("The collection of passing samples also pass 'seqsender prep' validation together as one unit")
 
     # --validation_only stops here: the reads aren't copied to the bucket and no submission tarball is written
     if options.validation_only:

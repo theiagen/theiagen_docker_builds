@@ -2,13 +2,13 @@
 
 import argparse
 import logging
-import subprocess
 import time
 from datetime import timedelta
 from pathlib import Path
 
 import pandas as pd
 
+from seqsender_ops.cli import seqsender_submission_status
 from seqsender_ops.logging_config import setup_logging
 from seqsender_ops.models import DATABASES
 
@@ -66,36 +66,6 @@ def get_overall_status(statuses: dict[str, str]) -> str:
     return "PENDING"
 
 
-def run_submission_status(
-    submit_dir: Path,
-    submission_name: str,
-    key: str,
-) -> None:
-    """Runs one `seqsender.py submission_status` check; exits if seqsender reports any problem"""
-    command = [
-        "micromamba", "run", "-n", "seqsender", "seqsender.py", "submission_status",
-        "--submission_dir", str(submit_dir),
-        "--submission_name", submission_name,
-        "--key", key,
-    ]
-    # the command isn't logged because it holds the key
-    result = subprocess.run(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True
-    )
-    lines = [line for line in result.stdout.splitlines() if line.strip()]
-    for line in lines:
-        logger.info(f"seqsender: {line}")
-
-    # seqsender prints these and can still exit 0, e.g. when it can't read the accessions from a processed report.xml
-    if "Unable to access config file with key" in result.stdout:
-        raise SystemExit("ERROR: --key doesn't decrypt the NCBI password in config.yaml; use the key that encrypted it")
-    if result.returncode != 0 or any(line.lstrip().startswith("Error") for line in lines):
-        raise SystemExit("ERROR: seqsender submission_status failed; see the seqsender output in the log")
-
-
 def missing_accessions(status_report: Path) -> dict[str, list[str]]:
     """Returns the sample names in submission_status_report.csv that have no accession, for each database"""
     report_df = pd.read_csv(status_report, dtype=str, keep_default_na=False)
@@ -134,7 +104,7 @@ def main():
     deadline = start + max_wait.total_seconds()
     interval = args.poll_interval_minutes * 60
     while True:
-        run_submission_status(
+        seqsender_submission_status(
             submit_dir=submit_dir,
             submission_name=submission_name,
             key=args.key,
