@@ -67,11 +67,11 @@ def stage_samples(
 
 
 def upload_reads(
-    valid_samples: list[Sample],
+    passed_samples: list[Sample],
     read_bucket: str,
 ) -> None:
     """Copies the passing samples' reads to the transfer bucket NCBI fetches them from"""
-    reads = [read for sample in valid_samples for read in sample.reads]
+    reads = [read for sample in passed_samples for read in sample.reads]
     logger.info(f"Copying {len(reads)} read files to {read_bucket}")
 
     bucket_name, _, prefix = read_bucket.removeprefix("gs://").partition("/")
@@ -86,8 +86,8 @@ def upload_reads(
     logger.info(f"Copied {len(reads)} read files to {read_bucket}")
 
 
-def combine_passed(
-    valid_samples: list[Sample],
+def combine_passed_samples(
+    passed_samples: list[Sample],
     submit_dir: Path,
     config_file: Path,
     include_reads: bool = True,
@@ -109,7 +109,7 @@ def combine_passed(
 
     all_metadata: list[pd.DataFrame] = []
     all_fastas: list[SeqRecord] = []
-    for sample in valid_samples:
+    for sample in passed_samples:
         if include_reads:
             for read in sample.reads:
                 logger.info(f"Moving {read} to {raw_reads_dir / read.name}")

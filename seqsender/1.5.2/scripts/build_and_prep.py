@@ -11,7 +11,7 @@ from seqsender_ops.cli import (
     seqsender_prep,
 )
 from seqsender_ops.files import (
-    combine_passed,
+    combine_passed_samples,
     stage_samples,
     upload_reads,
     write_tarball,
@@ -158,7 +158,7 @@ def main():
     # 3. the template of required columns is written even if every sample fails validation below
     table_name = sample_column.removeprefix("entity:").removesuffix("_id")
     write_metadata_template(
-        metadata_df=pd.concat([sample.metadata for sample in samples]),
+        built_metadata_df=pd.concat([sample.metadata for sample in samples]),
         sample_column=sample_column,
         options=options,
         template_file=args.output_dir / f"{table_name}_template.tsv",
@@ -194,15 +194,15 @@ def main():
 
     write_validation_summary(samples, args.output_dir)
 
-    # 5. exit if no valid samples
-    valid_samples = [sample for sample in samples if sample.passed]
-    if not valid_samples:
+    # 5. exit if no samples passed
+    passed_samples = [sample for sample in samples if sample.passed]
+    if not passed_samples:
         logger.warning("No samples passed seqsender prep; no submission tarball written")
         return
 
     # 6. combine the passing samples into submit/ and prep them together, the way `seqsender submit` will
-    combine_passed(
-        valid_samples=valid_samples,
+    combine_passed_samples(
+        passed_samples=passed_samples,
         submit_dir=submit_dir,
         config_file=options.config_file,
         include_reads=not options.sra_transfer_bucket,
@@ -232,7 +232,7 @@ def main():
     # 7. copy the passing samples' reads to the `--sra_transfer_bucket` if appropriate
     if options.sra and options.sra_transfer_bucket:
         upload_reads(
-            valid_samples=valid_samples,
+            passed_samples=passed_samples,
             read_bucket=options.sra_transfer_bucket,
         )
 

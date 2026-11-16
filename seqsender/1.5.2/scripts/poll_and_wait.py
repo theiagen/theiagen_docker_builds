@@ -51,7 +51,7 @@ def relocate_submission_log(
             raise SystemExit(f"ERROR: {path} from submission_log.csv doesn't exist")
 
 
-def get_db_status(log_df: pd.DataFrame) -> dict[str, str]:
+def get_db_statuses(log_df: pd.DataFrame) -> dict[str, str]:
     """Returns each database's latest status, e.g. {"BIOSAMPLE": "PROCESSED", "SRA": "PROCESSING", "GENBANK": "WAITING"}"""
     # GENBANK-FTP and GENBANK-TBL2ASN are both reported as GENBANK
     return {database.split("-")[0]: status for database, status in zip(log_df["Database"], log_df["Submission_Status"])}
@@ -66,7 +66,7 @@ def get_overall_status(statuses: dict[str, str]) -> str:
     return "PENDING"
 
 
-def missing_accessions(status_report: Path) -> dict[str, list[str]]:
+def find_missing_accessions(status_report: Path) -> dict[str, list[str]]:
     """Returns the sample names in submission_status_report.csv that have no accession, for each database"""
     report_df = pd.read_csv(status_report, dtype=str, keep_default_na=False)
     missing = {}
@@ -112,26 +112,26 @@ def main():
 
         # seqsender updates submission_log.csv on each check
         log_df = load_submission_log(submit_dir)
-        db_statuses = get_db_status(log_df)
-        main_status = get_overall_status(db_statuses)
+        db_statuses = get_db_statuses(log_df)
+        overall_status = get_overall_status(db_statuses)
         logger.info(f"Time elapsed:{timedelta(seconds=round(time.time() - start))} / {max_wait}")
-        logger.info(f"{' '.join(f'{db}={status}' for db, status in db_statuses.items())} -> {main_status}\n")
+        logger.info(f"{' '.join(f'{db}={status}' for db, status in db_statuses.items())} -> {overall_status}\n")
 
-        if main_status != "PENDING" or time.time() + interval > deadline:
+        if overall_status != "PENDING" or time.time() + interval > deadline:
             break
         time.sleep(interval)
 
     # NCBI can report processed-ok without accessioning every sample, e.g. GenBank_Auto_Remove_Failed_Samples drops failed sequences
-    if main_status == "COMPLETE":
-        missing = missing_accessions(submit_dir / submission_name / "submission_files" / "submission_status_report.csv")
+    if overall_status == "COMPLETE":
+        missing = find_missing_accessions(submit_dir / submission_name / "submission_files" / "submission_status_report.csv")
         for database, names in missing.items():
             logger.error(f"{database}: {len(names)} processed without an accession: {', '.join(names)}")
         if missing:
-            main_status = "ERROR"
+            overall_status = "ERROR"
 
     (args.output_dir / "DATABASE_STATUSES").write_text(' '.join(f'{db}={status}' for db, status in db_statuses.items()))
-    (args.output_dir / "FINAL_STATUS").write_text(main_status)
-    logger.info(f"Final status: {main_status}")
+    (args.output_dir / "FINAL_STATUS").write_text(overall_status)
+    logger.info(f"Final status: {overall_status}")
 
 
 if __name__ == "__main__":

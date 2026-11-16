@@ -54,13 +54,14 @@ def expand_metadata_per_sequence(
 def add_existing_accessions(
     df: pd.DataFrame,
     options: BuildOptions,
-) -> None:
+) -> pd.DataFrame:
     """
-    Adds the BioSample/SRA accessions from an earlier run to a GenBank submission's metadata, matching what seqsender
+    Returns `df` with the BioSample/SRA accessions from an earlier run added to a GenBank submission's metadata, matching what seqsender
     adds itself when all three databases are submitted together. Mimics seqsender's `Link_Sample_Between_NCBI_Databases` and
     `Add_Definition_Line_Accessions` configuration options when submitting just to GenBank (with prior successful submission to BioSample and SRA).
     Necessary for attempting to resubmit a failed Genbank submission when everything else has successfully processed.
     """
+    df = df.copy()
     tags = []
 
     biosample_accession = get_value(df, BIOSAMPLE_DB.accession_column)
@@ -84,6 +85,8 @@ def add_existing_accessions(
         modifiers = " ".join([*def_line_accession.split(), *tags])
         df["gb-fasta_definition_line_modifiers"] = modifiers
         logger.info(f"Setting `gb-fasta_definition_line_modifiers` metadata column to: '{modifiers}'")
+
+    return df
 
 
 def build_sample_metadata(
@@ -124,7 +127,7 @@ def build_sample_metadata(
 
     # links a GenBank submission to the BioSample/SRA accessioned in an earlier run (if applicable)
     if options.genbank and options.link_databases:
-        add_existing_accessions(
+        sample_metadata_df = add_existing_accessions(
             df=sample_metadata_df,
             options=options,
         )
@@ -154,15 +157,15 @@ def write_sample_metadata(
 
 
 def write_metadata_template(
-    metadata_df: pd.DataFrame,
+    built_metadata_df: pd.DataFrame,
     sample_column: str,
     options: BuildOptions,
     template_file: Path,
 ) -> None:
     """
     Writes '<table_name>_template.tsv'. Contains the selected samples' required metadata columns to fill in and upload to the Terra table.
-    Mimics the behavior of the SeqSender submission wizard; the columns come from the schemas outlined in ('shiny/templates/'). The `metadata_df`
-    holds all existing/built sample metadata (including Terra values); empty cells hold '<column description>'.
+    Mimics the behavior of the SeqSender submission wizard; the columns come from the schemas outlined in ('shiny/templates/'). The `built_metadata_df`
+    holds every sample's metadata from `build_sample_metadata` (including Terra values); empty cells hold '<column description>'.
     """
     templates_dir = Path(shutil.which("seqsender.py")).parent / "shiny" / "templates"
     template_files = ["config.seqsender.seqsender.schema_template.csv"]
@@ -184,7 +187,7 @@ def write_metadata_template(
     if options.genbank and options.seqsender_organism_tag == "FLU":
         flu_required_columns = set()
         # without an `organism` column, only the columns every flu sample needs
-        for organism in metadata_df.get("organism", [""]):
+        for organism in built_metadata_df.get("organism", [""]):
             flu_required_columns.update(flu_genbank_required_columns(organism))
         columns_df.loc[columns_df["column_name"].isin(flu_required_columns), "required_column"] = "Required"
 
@@ -199,7 +202,7 @@ def write_metadata_template(
         for row in columns_df.itertuples()
     }
 
-    template_df = metadata_df.reindex(columns=[sample_column, *placeholders]).fillna("")
+    template_df = built_metadata_df.reindex(columns=[sample_column, *placeholders]).fillna("")
     for column, placeholder in placeholders.items():
         template_df[column] = template_df[column].mask(template_df[column].str.strip() == "", placeholder)
 
