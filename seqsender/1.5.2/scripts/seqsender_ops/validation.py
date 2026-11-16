@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+from Bio import SeqIO
 
 from .metadata import flu_genbank_required_columns, get_value
 from .models import BuildOptions, Sample, SampleError
@@ -55,8 +56,20 @@ def check_flu_genbank(
         raise SampleError(f"NCBI requires {', '.join(missing_flu_columns)} for '{sample_organism}' submissions to GenBank")
 
 
-def validate_sample_metadata(
-    sample_metadata_df: pd.DataFrame,
+def check_assembly_fasta(
+    assembly_fasta: Path,
+) -> None:
+    """Raises if the sample's assembly FASTA can't be read, is empty, or has an empty sequence"""
+    try:
+        records = list(SeqIO.parse(assembly_fasta, "fasta"))
+    except ValueError as error:
+        raise SampleError(f"assembly FASTA can't be read: {error}") from error
+    if not records or any(len(record.seq) == 0 for record in records):
+        raise SampleError("assembly FASTA is empty or has an empty sequence")
+
+
+def validate_sample(
+    sample: Sample,
     options: BuildOptions,
 ) -> None:
     """
@@ -64,15 +77,19 @@ def validate_sample_metadata(
     Raises SampleError if the sample can't be submitted.
     """
     check_placeholders(
-        df=sample_metadata_df,
+        df=sample.metadata,
     )
     check_existing_accessions(
-        df=sample_metadata_df,
+        df=sample.metadata,
         options=options,
     )
     if options.genbank and options.seqsender_organism_tag == "FLU":
         check_flu_genbank(
-            df=sample_metadata_df,
+            df=sample.metadata,
+        )
+    if options.genbank:
+        check_assembly_fasta(
+            assembly_fasta=sample.fasta,
         )
 
 

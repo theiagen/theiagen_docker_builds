@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 from Bio import SeqIO
 
-from .models import BIOSAMPLE_DB, SRA_DB, BuildOptions, Sample, SampleError
+from .models import BIOSAMPLE_DB, SRA_DB, BuildOptions, Sample
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +39,7 @@ def expand_metadata_per_sequence(
     seqsender matches the required `sequence_name` column to the FASTA record ID. Overwrites any existing
     `sequence_name`/`gb-sample_name` columns previously stored in the input metadata/terra table.
     """
-    try:
-        records = list(SeqIO.parse(assembly_fasta, "fasta"))
-    except ValueError as error:
-        raise SampleError(f"assembly FASTA can't be read: {error}") from error
-    if not records or any(len(record.seq) == 0 for record in records):
-        raise SampleError("assembly FASTA is empty or has an empty sequence")
-    seq_ids = [record.id for record in records]
+    seq_ids = [record.id for record in SeqIO.parse(assembly_fasta, "fasta")]
     logger.info(f"Found {len(seq_ids)} FASTA record IDs in {assembly_fasta}")
 
     # one copy of the sample's row per sequence
@@ -144,7 +138,6 @@ def write_sample_metadata(
 ) -> None:
     """
     Creates a 'builds/<sample>/<sample>.metadata.csv' metadata file from `sample.metadata`, one row per FASTA record ID (genbank only).
-    Raises SampleError if the sample's assembly FASTA is empty or can't be read.
     """
     sample_metadata_df = sample.metadata
 

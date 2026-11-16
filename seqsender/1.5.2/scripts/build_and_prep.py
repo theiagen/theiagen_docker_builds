@@ -25,7 +25,7 @@ from seqsender_ops.models import (
 from seqsender_ops.validation import (
     run_prep,
     sample_prep,
-    validate_sample_metadata,
+    validate_sample,
     write_validation_summary,
 )
 from seqsender_ops.logging_config import setup_logging
@@ -166,8 +166,8 @@ def main():
     for sample in samples:
         try:
             # build_and_prep's own checks, then seqsender's
-            validate_sample_metadata(
-                sample_metadata_df=sample.metadata,
+            validate_sample(
+                sample=sample,
                 options=options,
             )
             write_sample_metadata(
