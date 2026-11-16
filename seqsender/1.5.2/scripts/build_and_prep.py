@@ -57,7 +57,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def check_inputs(args) -> None:
+def check_args(args) -> None:
     """Exits on problems with the inputs as a whole; problems with a single sample only fail that sample"""
     if not any(getattr(args, db.name) for db in DATABASES):
         raise SystemExit("ERROR: choose at least one of --biosample, --sra or --genbank")
@@ -114,8 +114,22 @@ def main():
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     setup_logging(args.output_dir / "seqsender_build_and_prep.log")
-    check_inputs(args)
+
+    # checks input args are valid; exit early if not
+    check_args(args)
     options = BuildOptions.from_args(args)
+
+    # the Terra table is the base of each sample's metadata.csv; first column should be 'entity:<table_name>_id' and hold all sample IDs
+    metadata_df = pd.read_csv(args.metadata_file, sep="\t", dtype=str, keep_default_na=False)
+    sample_column = metadata_df.columns[0]  # e.g. 'entity:<table_name>_id'
+
+    # checks metadata table is valid; exit early if not
+    check_metadata_table(
+        metadata_df=metadata_df,
+        sample_column=sample_column,
+        sample_ids=args.sample_ids,
+    )
+
     logger.info(f"Preparing {len(args.sample_ids)} samples for {', '.join(db.name for db in options.target_dbs)}")
 
     builds_dir = args.output_dir / "builds"
@@ -130,16 +144,7 @@ def main():
         read2_fastqs=args.read2_fastqs if options.sra else [],
     )
 
-    # 2. the Terra table is the base of each sample's metadata.csv; first column should be 'entity:<table_name>_id' and hold all sample IDs
-    metadata_df = pd.read_csv(args.metadata_file, sep="\t", dtype=str, keep_default_na=False)
-    sample_column = metadata_df.columns[0]  # e.g. 'entity:<table_name>_id'
-    check_metadata_table(
-        metadata_df=metadata_df,
-        sample_column=sample_column,
-        sample_ids=args.sample_ids,
-    )
-
-    # 3. fill in the columns build_and_prep sets itself; the samples are checked in step 5
+    # 2. fill in the columns build_and_prep sets itself; the samples are checked in step 4
     for sample in samples:
         sample.metadata = build_sample_metadata(
             sample=sample,
@@ -148,7 +153,7 @@ def main():
             options=options,
         )
 
-    # 4. the template of required columns is written even if every sample fails validation below
+    # 3. the template of required columns is written even if every sample fails validation below
     table_name = sample_column.removeprefix("entity:").removesuffix("_id")
     write_metadata_template(
         metadata_df=pd.concat([sample.metadata for sample in samples]),
@@ -157,7 +162,7 @@ def main():
         template_file=args.output_dir / f"{table_name}_template.tsv",
     )
 
-    # 5. validate each sample on its own; a sample that fails is left out of the submission
+    # 4. validate each sample on its own; a sample that fails is left out of the submission
     for sample in samples:
         try:
             # build_and_prep's own checks, then seqsender's
@@ -183,13 +188,13 @@ def main():
 
     write_validation_summary(samples, args.output_dir)
 
-    # 6. exit if no valid samples
+    # 5. exit if no valid samples
     valid_samples = [sample for sample in samples if sample.passed]
     if not valid_samples:
         logger.warning("No samples passed seqsender prep; no submission tarball written")
         return
 
-    # 7. combine the passing samples into submit/ and prep them together, the way `seqsender submit` will
+    # 6. combine the passing samples into submit/ and prep them together, the way `seqsender submit` will
     combine_passed(
         valid_samples=valid_samples,
         submit_dir=submit_dir,
@@ -207,14 +212,14 @@ def main():
         logger.info("--validation_only: skipping read upload to google bucket; skipping creation of submission tarball")
         return
 
-    # 8. copy the passing samples' reads to the `--sra_transfer_bucket` if appropriate
+    # 7. copy the passing samples' reads to the `--sra_transfer_bucket` if appropriate
     if options.sra and options.sra_transfer_bucket:
         upload_reads(
             valid_samples=valid_samples,
             read_bucket=options.sra_transfer_bucket,
         )
 
-    # 9. tar submit/ for the submit task
+    # 8. tar submit/ for the submit task
     write_tarball(
         submit_dir=submit_dir,
         tarball=args.output_dir / "seqsender_post_validation_checkpoint.tar.gz",
