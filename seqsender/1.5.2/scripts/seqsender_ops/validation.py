@@ -4,8 +4,15 @@ from pathlib import Path
 import pandas as pd
 from Bio import SeqIO
 
-from .metadata import get_flu_genbank_required_columns, get_value
-from .models import BuildOptions, Sample, SampleError
+from .metadata import (
+    get_flu_genbank_required_columns,
+    get_value,
+)
+from .models import (
+    BuildOptions,
+    Sample,
+    SampleError,
+)
 
 logger = logging.getLogger(__name__)
 

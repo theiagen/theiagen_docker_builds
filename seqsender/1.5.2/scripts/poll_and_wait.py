@@ -8,9 +8,15 @@ from pathlib import Path
 
 import pandas as pd
 
-from seqsender_ops.cli import seqsender_submission_status
-from seqsender_ops.logging_config import setup_logging
-from seqsender_ops.models import DATABASES
+from seqsender_ops.cli import (
+    seqsender_submission_status,
+)
+from seqsender_ops.logging_config import (
+    setup_logging,
+)
+from seqsender_ops.models import (
+    DATABASES,
+)
 
 logger = logging.getLogger("poll_and_wait")
 

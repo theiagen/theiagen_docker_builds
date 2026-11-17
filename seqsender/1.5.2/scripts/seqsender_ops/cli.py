@@ -4,7 +4,10 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from .models import BuildOptions, SampleError
+from .models import (
+    BuildOptions,
+    SampleError,
+)
 
 logger = logging.getLogger(__name__)
 

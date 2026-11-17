@@ -16,6 +16,9 @@ from seqsender_ops.files import (
     upload_reads,
     write_tarball,
 )
+from seqsender_ops.logging_config import (
+    setup_logging,
+)
 from seqsender_ops.metadata import (
     build_sample_metadata,
     write_metadata_template,
@@ -30,7 +33,6 @@ from seqsender_ops.validation import (
     validate_sample,
     write_validation_summary,
 )
-from seqsender_ops.logging_config import setup_logging
 
 logger = logging.getLogger("build_and_prep")
 
