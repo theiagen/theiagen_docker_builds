@@ -16,6 +16,7 @@ from seqsender_ops.logging_config import (
 )
 from seqsender_ops.models import (
     DATABASES,
+    GENBANK_DB,
 )
 
 logger = logging.getLogger("poll_and_wait")
@@ -72,15 +73,23 @@ def get_overall_status(statuses: dict[str, str]) -> str:
     return "PENDING"
 
 
-def find_missing_accessions(status_report: Path) -> dict[str, list[str]]:
+def find_missing_accessions(
+    status_report: Path,
+    submission_type: str,
+) -> dict[str, list[str]]:
     """Returns the sample names in submission_status_report.csv that have no accession, for each database"""
     report_df = pd.read_csv(status_report, dtype=str, keep_default_na=False)
     missing = {}
     for db in DATABASES:
-        if db.sample_name_column in report_df:
-            names = report_df.loc[report_df[db.accession_column].str.strip() == "", db.sample_name_column].unique().tolist()
-            if names:
-                missing[db.name.upper()] = names
+        if db.sample_name_column not in report_df:
+            continue
+        # the test GenBank's AccessionReport.tsv is not available for download on submit.ncbi.nlm.nih.gov, so genbank_accession is always blank
+        if db is GENBANK_DB and submission_type == "TEST":
+            logger.info("GENBANK: skipped the accession check; test GenBank accessions can't be downloaded")
+            continue
+        names = report_df.loc[report_df[db.accession_column].str.strip() == "", db.sample_name_column].unique().tolist()
+        if names:
+            missing[db.name.upper()] = names
     return missing
 
 
@@ -94,15 +103,20 @@ def main():
         raise SystemExit(f"ERROR: {submit_dir}/submission_log.csv not found; this state hasn't been submitted")
 
     log_df = load_submission_log(submit_dir)
+
     submission_name = log_df["Submission_Name"].iloc[0]
     (args.output_dir / "SUBMISSION_NAME").write_text(submission_name)
+
+    # outputs "TEST" or "PRODUCTION"
+    submission_type = log_df["Submission_Type"].iloc[0]
+    (args.output_dir / "SUBMISSION_TYPE").write_text(submission_type)
 
     relocate_submission_log(
         submit_dir=submit_dir,
         log_df=log_df
     )
 
-    logger.info(f"Polling {submission_name} ({', '.join(log_df['Database'])}) every {args.poll_interval_minutes:g} minutes for up to {args.max_wait_hours:g} hours")
+    logger.info(f"Polling {submission_name} ({submission_type}; {', '.join(log_df['Database'])}) every {args.poll_interval_minutes:g} minutes for up to {args.max_wait_hours:g} hours")
 
     # the first check runs immediately; seqsender also uploads GenBank once BioSample and SRA are processed
     start = time.time()
@@ -129,7 +143,10 @@ def main():
 
     # NCBI can report processed-ok without accessioning every sample, e.g. GenBank_Auto_Remove_Failed_Samples drops failed sequences
     if overall_status == "COMPLETE":
-        missing = find_missing_accessions(submit_dir / submission_name / "submission_files" / "submission_status_report.csv")
+        missing = find_missing_accessions(
+            status_report=submit_dir / submission_name / "submission_files" / "submission_status_report.csv",
+            submission_type=submission_type,
+        )
         for database, names in missing.items():
             logger.error(f"{database}: {len(names)} processed without an accession: {', '.join(names)}")
         if missing:
