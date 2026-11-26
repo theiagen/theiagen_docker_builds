@@ -1,0 +1,38 @@
+--- a/fastq_dl/fastq_dl.py
++++ b/fastq_dl/fastq_dl.py
+@@ -7,6 +7,7 @@
+ import time
+ from pathlib import Path
+ 
++import pandas as pd
+ import requests
+ import rich
+ import rich_click as click
+@@ -398,6 +399,7 @@
+     """
+     #
+     db = SRAweb()
++    db.fetch_ena_fastq = lambda srp: pd.DataFrame()
+     df = db.search_sra(
+         query, detailed=True, sample_attribute=True, expand_sample_attributes=True
+     )
+@@ -418,7 +420,10 @@
+     """
+     url = f'{ENA_URL}&query="{query}"&fields=all'
+     headers = {"Content-type": "application/x-www-form-urlencoded"}
+-    r = requests.get(url, headers=headers)
++    try:
++        r = requests.get(url, headers=headers, timeout=30)
++    except requests.exceptions.RequestException as error:
++        return [False, [None, str(error)]]
+     if r.status_code == requests.codes.ok:
+         data = []
+         col_names = None
+@@ -464,6 +469,7 @@
+     Returns:
+         tuple: Records associated with the accession.
+     """
++    only_provider = only_provider or provider.lower() == "sra"
+     # Attempt for when "--only-provider" used, others to allow multiple attempts on fallback
+     attempt = 1
+     sra_attempt = 1
