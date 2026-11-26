@@ -13,7 +13,6 @@ LABEL software.version="${FASTQ_DL_VER}"
 LABEL description="fastq-dl 2.0.4 patched to skip ENA metadata queries when --provider sra is used"
 LABEL website="https://github.com/rpetit3/fastq-dl"
 LABEL license="https://github.com/rpetit3/fastq-dl/blob/master/LICENSE"
-LABEL maintainer="Thanh Lee"
 
 COPY fastq-dl-2.0.4-enafree.patch ${PATCH_FILE}
 
